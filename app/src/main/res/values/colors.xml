@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_app">#FF161616</color>
+    <color name="bg_sidebar">#FF1B1B1B</color>
+    <color name="bg_surface">#FF222222</color>
+    <color name="bg_surface_hover">#FF2C2C2C</color>
+    <color name="bg_input">#FF272727</color>
+    <color name="border_subtle">#FF2B2B2B</color>
+    <color name="border_strong">#FF3B3B3B</color>
+    <color name="text_primary">#FFEEEEEC</color>
+    <color name="text_secondary">#FFB0B0AC</color>
+    <color name="text_muted">#FF858581</color>
+    <color name="accent">#FFD7D7CC</color>
+    <color name="success">#FF91B99C</color>
+    <color name="warning">#FFC8B382</color>
+    <color name="danger">#FFD89993</color>
+    <color name="active_bg">#FF363633</color>
+    <color name="scrollbar">#FF41413E</color>
+    <color name="ic_launcher_background">#010101</color>
+    <color name="splash_black">#000000</color>
+</resources>

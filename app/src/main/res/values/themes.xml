@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AltrexCode" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg_app</item>
+        <item name="android:statusBarColor">@color/bg_sidebar</item>
+        <item name="android:navigationBarColor">@color/bg_app</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Native AndroidX SplashScreen starting theme. -->
+    <style name="Theme.AltrexCode.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_black</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_logo_animated</item>
+        <item name="windowSplashScreenAnimationDuration">2250</item>
+        <item name="postSplashScreenTheme">@style/Theme.AltrexCode</item>
+    </style>
+</resources>

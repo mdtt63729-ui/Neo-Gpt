@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ALTREX CODE</string>
+    <string name="app_tagline">Local-first AI coding environment</string>
+    
+    <!-- Modes -->
+    <string name="mode_ask">Ask</string>
+    <string name="mode_agent">Agent</string>
+    <string name="mode_multi">Multi-AI</string>
+    
+    <!-- Sidebar -->
+    <string name="new_chat">New chat</string>
+    <string name="recent_conversations">Recent conversations</string>
+    <string name="collapse_sidebar">Collapse sidebar</string>
+    <string name="expand_sidebar">Expand sidebar</string>
+    
+    <!-- Home -->
+    <string name="welcome_title">ALTREX CODE</string>
+    <string name="welcome_subtitle">Local-first AI coding environment</string>
+    <string name="suggestion_explore">Explore a codebase</string>
+    <string name="suggestion_build">Build a feature</string>
+    <string name="suggestion_review">Review recent changes</string>
+    <string name="suggestion_fix">Fix a bug</string>
+    
+    <!-- Composer -->
+    <string name="composer_placeholder">Ask anything, or describe a task...</string>
+    <string name="send">Send</string>
+    <string name="cancel">Cancel</string>
+    <string name="stop">Stop</string>
+    <string name="attach_file">Attach file</string>
+    
+    <!-- Settings -->
+    <string name="settings">Settings</string>
+    <string name="tab_ai_models">AI &amp; Models</string>
+    <string name="tab_appearance">Appearance</string>
+    <string name="tab_permissions">Permissions</string>
+    
+    <!-- Providers -->
+    <string name="providers">Providers</string>
+    <string name="connect_provider">Connect Provider</string>
+    <string name="api_key">API Key</string>
+    <string name="model">Model</string>
+    <string name="test_connection">Test Connection</string>
+    <string name="connected">Connected</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="auto_select">AUTO</string>
+    
+    <!-- Multi-AI -->
+    <string name="multi_ai_run">Multi-AI Run</string>
+    <string name="planning">Planning</string>
+    <string name="running">Running</string>
+    <string name="verifying">Verifying</string>
+    <string name="integrating">Integrating</string>
+    <string name="completed">Completed</string>
+    <string name="failed">Failed</string>
+    <string name="cancel_run">Cancel Run</string>
+    <string name="restart_tasks">Restart Unfinished Tasks</string>
+    
+    <!-- Errors -->
+    <string name="error_auth">Authentication failed. Check your API key.</string>
+    <string name="error_quota">Quota exhausted. Check your provider account.</string>
+    <string name="error_rate_limit">Rate limited. Please wait a moment.</string>
+    <string name="error_model">Model unavailable. Try a different model.</string>
+    <string name="error_connection">Connection error. Check your network.</string>
+    <string name="error_timeout">Request timed out. Please try again.</string>
+    
+    <!-- Command palette -->
+    <string name="command_palette">Command Palette</string>
+    <string name="search_conversations">Search conversations...</string>
+</resources>

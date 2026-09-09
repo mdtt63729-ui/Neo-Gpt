@@ -1,0 +1,7 @@
+# Copy this file to local.properties and set the path to your Android SDK
+# This file should NOT be committed to git (it's in .gitignore)
+# GitHub Actions will set up the SDK automatically — you only need this for local builds
+
+sdk.dir=/Users/yourusername/Library/Android/sdk
+# On Linux: sdk.dir=/home/yourusername/Android/Sdk
+# On Windows: sdk.dir=C:\\Users\\yourusername\\AppData\\Local\\Android\\Sdk
