@@ -10,26 +10,31 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(private val repository: SettingsRepository) : ViewModel() {
-    val selectedFont: StateFlow<String> = repository.selectedFontFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Inter")
-    val textSize: StateFlow<Float> = repository.textSizeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 16f)
-    val themeMode: StateFlow<Int> = repository.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
-    val loggedInUser: StateFlow<String?> = repository.loggedInUserFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-    
-    val openRouterKey: StateFlow<String> = repository.openRouterKeyFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
-    val nvidiaKey: StateFlow<String> = repository.nvidiaKeyFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
-    val geminiKey: StateFlow<String> = repository.geminiKeyFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
-    val selectedModel: StateFlow<String> = repository.selectedModelFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "venus-3.1")
+    val selectedFont: StateFlow<String> = repository.selectedFontFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "Inter")
+    val textSize: StateFlow<Float> = repository.textSizeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 16f)
+    val themeMode: StateFlow<Int> = repository.themeModeFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    val selectedProvider: StateFlow<String> = repository.selectedProviderFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "Venus")
+    val selectedModel: StateFlow<String> = repository.selectedModelFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "venus-3.1")
+    val customModels: StateFlow<String> = repository.customModelsFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "[]")
 
-    fun setFont(fontName: String) = viewModelScope.launch { repository.saveFont(fontName) }
-    fun setTextSize(size: Float) = viewModelScope.launch { repository.saveTextSize(size) }
-    fun setThemeMode(mode: Int) = viewModelScope.launch { repository.saveThemeMode(mode) }
-    fun login(username: String) = viewModelScope.launch { repository.saveLoggedInUser(username) }
-    fun logout() = viewModelScope.launch { repository.saveLoggedInUser(null) }
-    
-    fun setOpenRouterKey(key: String) = viewModelScope.launch { repository.saveOpenRouterKey(key) }
-    fun setNvidiaKey(key: String) = viewModelScope.launch { repository.saveNvidiaKey(key) }
-    fun setGeminiKey(key: String) = viewModelScope.launch { repository.saveGeminiKey(key) }
-    fun setSelectedModel(model: String) = viewModelScope.launch { repository.saveSelectedModel(model) }
+    val openRouterKey: StateFlow<String> = repository.openRouterKeyFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+    val nvidiaKey: StateFlow<String> = repository.nvidiaKeyFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+    val geminiKey: StateFlow<String> = repository.geminiKeyFlow.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
+
+    fun setFont(value: String) = viewModelScope.launch { repository.saveFont(value) }
+    fun setTextSize(value: Float) = viewModelScope.launch { repository.saveTextSize(value) }
+    fun setThemeMode(value: Int) = viewModelScope.launch { repository.saveThemeMode(value) }
+    fun setProvider(value: String) = viewModelScope.launch { repository.saveSelectedProvider(value) }
+    fun setModel(value: String) = viewModelScope.launch { repository.saveSelectedModel(value) }
+    fun setOpenRouterKey(value: String) = viewModelScope.launch { repository.saveOpenRouterKey(value) }
+    fun setNvidiaKey(value: String) = viewModelScope.launch { repository.saveNvidiaKey(value) }
+    fun setGeminiKey(value: String) = viewModelScope.launch { repository.saveGeminiKey(value) }
+    fun addCustomModel(displayName: String, modelId: String, provider: String, description: String) = viewModelScope.launch {
+        repository.saveCustomModel(displayName, modelId, provider, description)
+    }
+    fun removeCustomModel(provider: String, modelId: String) = viewModelScope.launch {
+        repository.removeCustomModel(provider, modelId)
+    }
 }
 
 class SettingsViewModelFactory(private val repository: SettingsRepository) : ViewModelProvider.Factory {

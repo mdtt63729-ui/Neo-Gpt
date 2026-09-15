@@ -21,7 +21,7 @@ class MainActivity : ComponentActivity() {
     private val settingsRepository by lazy { SettingsRepository(this) }
     
     private val chatViewModel: ChatViewModel by viewModels {
-        ChatViewModelFactory(database.messageDao(), settingsRepository)
+        ChatViewModelFactory(database.messageDao(), settingsRepository, contentResolver)
     }
     private val settingsViewModel: SettingsViewModel by viewModels {
         SettingsViewModelFactory(settingsRepository)

@@ -8,67 +8,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.R
 
-val InterFontFamily = FontFamily(
-    Font(R.font.inter)
-)
-
-val JosefinSansFontFamily = FontFamily(
-    Font(R.font.josefin_sans)
-)
+val InterFontFamily = FontFamily(Font(R.font.inter))
+val JosefinSansFontFamily = FontFamily(Font(R.font.josefin_sans))
 
 fun getAppTypography(fontName: String): Typography {
-    val fontFamily = if (fontName == "Josefin Sans") JosefinSansFontFamily else InterFontFamily
+    val family = if (fontName == "Josefin Sans") JosefinSansFontFamily else InterFontFamily
     return Typography(
-        bodyLarge = TextStyle(
-            fontFamily = fontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
-            lineHeight = 24.sp,
-            letterSpacing = 0.5.sp
-        ),
-        titleLarge = TextStyle(
-            fontFamily = fontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 22.sp,
-            lineHeight = 28.sp,
-            letterSpacing = 0.sp
-        ),
-        labelSmall = TextStyle(
-            fontFamily = fontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 11.sp,
-            lineHeight = 16.sp,
-            letterSpacing = 0.5.sp
-        ),
-        titleMedium = TextStyle(
-            fontFamily = fontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 16.sp,
-            lineHeight = 24.sp,
-            letterSpacing = 0.15.sp
-        ),
-        bodyMedium = TextStyle(
-            fontFamily = fontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            letterSpacing = 0.25.sp
-        ),
-        labelLarge = TextStyle(
-            fontFamily = fontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            letterSpacing = 0.1.sp
-        ),
-        bodySmall = TextStyle(
-            fontFamily = fontFamily,
-            fontWeight = FontWeight.Bold,
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
-            letterSpacing = 0.4.sp
-        )
+        displayLarge = TextStyle(fontFamily = family),
+        displayMedium = TextStyle(fontFamily = family),
+        displaySmall = TextStyle(fontFamily = family),
+        headlineLarge = TextStyle(fontFamily = family, fontWeight = FontWeight.Bold),
+        headlineMedium = TextStyle(fontFamily = family, fontWeight = FontWeight.Bold),
+        headlineSmall = TextStyle(fontFamily = family, fontWeight = FontWeight.Bold),
+        titleLarge = TextStyle(fontFamily = family, fontWeight = FontWeight.Bold),
+        titleMedium = TextStyle(fontFamily = family, fontWeight = FontWeight.Bold),
+        titleSmall = TextStyle(fontFamily = family, fontWeight = FontWeight.Bold),
+        bodyLarge = TextStyle(fontFamily = family, fontSize = 16.sp, lineHeight = 24.sp),
+        bodyMedium = TextStyle(fontFamily = family, fontSize = 14.sp, lineHeight = 20.sp),
+        bodySmall = TextStyle(fontFamily = family, fontSize = 12.sp, lineHeight = 16.sp),
+        labelLarge = TextStyle(fontFamily = family, fontWeight = FontWeight.Bold),
+        labelMedium = TextStyle(fontFamily = family, fontWeight = FontWeight.Bold),
+        labelSmall = TextStyle(fontFamily = family, fontWeight = FontWeight.Bold)
     )
 }
-
-val Typography = getAppTypography("Inter")

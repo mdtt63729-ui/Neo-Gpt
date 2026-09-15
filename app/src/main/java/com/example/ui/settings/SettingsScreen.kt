@@ -1,341 +1,245 @@
 package com.example.ui.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.outlined.*
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.TextFields
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.example.network.ProviderType
+import org.json.JSONArray
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
-    viewModel: SettingsViewModel,
-    onBack: () -> Unit,
-    onLogout: () -> Unit
-) {
-    val selectedFont by viewModel.selectedFont.collectAsState()
+fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
+    val font by viewModel.selectedFont.collectAsState()
+    val theme by viewModel.themeMode.collectAsState()
     val textSize by viewModel.textSize.collectAsState()
-    val themeMode by viewModel.themeMode.collectAsState()
-    val loggedInUser by viewModel.loggedInUser.collectAsState()
-    
-    var showFontDialog by remember { mutableStateOf(false) }
-    var showTextSizeDialog by remember { mutableStateOf(false) }
-    var showThemeDialog by remember { mutableStateOf(false) }
+    val openRouterKey by viewModel.openRouterKey.collectAsState()
+    val nvidiaKey by viewModel.nvidiaKey.collectAsState()
+    val geminiKey by viewModel.geminiKey.collectAsState()
+    val customModels by viewModel.customModels.collectAsState()
+
+    var showFont by remember { mutableStateOf(false) }
+    var showTheme by remember { mutableStateOf(false) }
+    var showTextSize by remember { mutableStateOf(false) }
+    var showCustomModel by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {},
-                navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.padding(start = 8.dp).background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color.DarkGray else Color(0xFFF5F5F5), CircleShape).size(40.dp)) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                title = { Text("Settings") },
+                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.Default.ArrowBack, "Back") } }
             )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { paddingValues ->
+        }
+    ) { padding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(bottom = 32.dp)
         ) {
+            item { SectionHeader("Appearance") }
             item {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier.size(80.dp),
-                        contentAlignment = Alignment.BottomEnd
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xFFF2994A), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("DM", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .background(Color.White, CircleShape)
-                                .padding(2.dp)
-                                .background(Color.LightGray, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                SettingsGroup {
+                    SettingsRow(Icons.Outlined.DarkMode, "Appearance", when (theme) { 1 -> "Light"; 2 -> "Dark"; else -> "System default" }) { showTheme = true }
+                    SettingsRow(Icons.Outlined.TextFields, "UI Font", font) { showFont = true }
+                    SettingsRow(Icons.Outlined.Tune, "Text size", "${textSize.toInt()}sp") { showTextSize = true }
+                }
+            }
+
+            item { SectionHeader("AI Providers") }
+            item {
+                SettingsGroup {
+                    ProviderKeyField("OpenRouter API Key", openRouterKey, viewModel::setOpenRouterKey)
+                    ProviderKeyField("NVIDIA NIM API Key", nvidiaKey, viewModel::setNvidiaKey)
+                    ProviderKeyField("Gemini API Key", geminiKey, viewModel::setGeminiKey)
+                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Key, null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("Venus 3.1", style = MaterialTheme.typography.titleMedium)
+                            Text("Always available • no API key required", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text("DHUN Music", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
                 }
             }
 
+            item { SectionHeader("Custom Models") }
             item {
-                SectionHeader("My Neo Gpt")
                 SettingsGroup {
-                    SettingsRow(icon = Icons.Outlined.Face, title = "Personalization")
-                    SettingsRow(icon = Icons.Outlined.MenuBook, title = "Memory")
-                    SettingsRow(icon = Icons.Outlined.Extension, title = "Plugins", showDivider = false)
-                }
-            }
-
-            item {
-                SectionHeader("Account")
-                SettingsGroup {
-                    SettingsRow(icon = Icons.Outlined.WorkOutline, title = "Workspace", subtitle = "Personal")
-                    SettingsRow(icon = Icons.Outlined.StarOutline, title = "Upgrade plan", titleColor = Color(0xFF1A73E8))
-                    SettingsRow(icon = Icons.Outlined.Assessment, title = "Usage and limits")
-                    SettingsRow(icon = Icons.Outlined.FamilyRestroom, title = "Parental controls")
-                    SettingsRow(icon = Icons.Outlined.Email, title = "Email", subtitle = loggedInUser ?: "dhunmusic521@gmail.com", showDivider = false)
-                }
-            }
-            
-            item {
-                SectionHeader("App Settings")
-                SettingsGroup {
-                    SettingsRow(icon = Icons.Outlined.FontDownload, title = "Font Style", subtitle = selectedFont, onClick = { showFontDialog = true })
-                    SettingsRow(icon = Icons.Outlined.FormatSize, title = "Text Size", subtitle = "${textSize.toInt()}sp", onClick = { showTextSizeDialog = true })
-                    val themeName = when (themeMode) {
-                        1 -> "Light"
-                        2 -> "Dark"
-                        else -> "System Default"
+                    Button(
+                        onClick = { showCustomModel = true },
+                        modifier = Modifier.fillMaxWidth().padding(16.dp)
+                    ) { Text("Add custom model") }
+                    val models = parseCustomModels(customModels)
+                    if (models.isEmpty()) {
+                        Text("No custom models added", modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        models.forEach { model ->
+                            ListItem(
+                                headlineContent = { Text(model.name) },
+                                supportingContent = { Text("${model.provider} • ${model.id}") },
+                                trailingContent = {
+                                    TextButton(onClick = { viewModel.removeCustomModel(model.provider, model.id) }) { Text("Remove") }
+                                }
+                            )
+                        }
                     }
-                    SettingsRow(icon = Icons.Outlined.LightMode, title = "Appearance", subtitle = themeName, onClick = { showThemeDialog = true }, showDivider = false)
+                    Spacer(Modifier.height(8.dp))
                 }
-            }
-            
-            item {
-                SectionHeader("API Providers")
-                val openRouterKey by viewModel.openRouterKey.collectAsState()
-                val nvidiaKey by viewModel.nvidiaKey.collectAsState()
-                val geminiKey by viewModel.geminiKey.collectAsState()
-
-                SettingsGroup {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                        OutlinedTextField(
-                            value = openRouterKey,
-                            onValueChange = { viewModel.setOpenRouterKey(it) },
-                            label = { Text("OpenRouter API Key") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF1A73E8),
-                                focusedLabelColor = Color(0xFF1A73E8),
-                                focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                                unfocusedTextColor = MaterialTheme.colorScheme.onBackground
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = nvidiaKey,
-                            onValueChange = { viewModel.setNvidiaKey(it) },
-                            label = { Text("Nvidia NIM API Key") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF1A73E8),
-                                focusedLabelColor = Color(0xFF1A73E8),
-                                focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                                unfocusedTextColor = MaterialTheme.colorScheme.onBackground
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        OutlinedTextField(
-                            value = geminiKey,
-                            onValueChange = { viewModel.setGeminiKey(it) },
-                            label = { Text("Gemini API Key") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF1A73E8),
-                                focusedLabelColor = Color(0xFF1A73E8),
-                                focusedTextColor = MaterialTheme.colorScheme.onBackground,
-                                unfocusedTextColor = MaterialTheme.colorScheme.onBackground
-                            )
-                        )
-                    }
-                }
-            }
-
-            item {
-                SettingsGroup(modifier = Modifier.padding(top = 24.dp)) {
-                    SettingsRow(icon = Icons.Outlined.Settings, title = "General")
-                    SettingsRow(icon = Icons.Outlined.Notifications, title = "Notifications")
-                    SettingsRow(icon = Icons.Outlined.GraphicEq, title = "Voice")
-                    SettingsRow(icon = Icons.Outlined.GppGood, title = "Safety", showDivider = false)
-                }
-            }
-
-            item {
-                SettingsGroup(modifier = Modifier.padding(top = 24.dp)) {
-                    SettingsRow(icon = Icons.Outlined.Logout, title = "Log out", titleColor = Color.Red, showDivider = false, onClick = onLogout)
-                }
-                Spacer(modifier = Modifier.height(48.dp))
             }
         }
     }
 
-    if (showFontDialog) {
+    if (showFont) {
+        ChoiceDialog("UI Font", listOf("Inter", "Josefin Sans"), font, { viewModel.setFont(it) }) { showFont = false }
+    }
+    if (showTheme) {
         AlertDialog(
-            onDismissRequest = { showFontDialog = false },
-            title = { Text("Select Font") },
+            onDismissRequest = { showTheme = false },
+            title = { Text("Appearance") },
             text = {
                 Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { 
-                            viewModel.setFont("Inter")
-                            showFontDialog = false
-                        }.padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Inter", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                        if (selectedFont == "Inter") Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF1A73E8))
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().clickable { 
-                            viewModel.setFont("Josefin Sans")
-                            showFontDialog = false
-                        }.padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Josefin Sans", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                        if (selectedFont == "Josefin Sans") Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF1A73E8))
+                    listOf(0 to "System default", 1 to "Light", 2 to "Dark").forEach { (value, label) ->
+                        ChoiceRow(label, theme == value) { viewModel.setThemeMode(value); showTheme = false }
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { showFontDialog = false }) { Text("Close", fontWeight = FontWeight.Bold) }
-            }
+            confirmButton = { TextButton(onClick = { showTheme = false }) { Text("Close") } }
         )
     }
-
-    if (showTextSizeDialog) {
-        AlertDialog(
-            onDismissRequest = { showTextSizeDialog = false },
-            title = { Text("Select Text Size") },
-            text = {
-                Column {
-                    listOf(14f, 16f, 18f, 20f).forEach { size ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                viewModel.setTextSize(size)
-                                showTextSizeDialog = false
-                            }.padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("${size.toInt()}sp", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                            if (textSize == size) Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF1A73E8))
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showTextSizeDialog = false }) { Text("Close", fontWeight = FontWeight.Bold) }
-            }
-        )
+    if (showTextSize) {
+        ChoiceDialog("Text size", listOf("14" to "14sp", "16" to "16sp", "18" to "18sp", "20" to "20sp"), textSize.toInt().toString(), { viewModel.setTextSize(it.toFloat()) }) { showTextSize = false }
     }
-
-    if (showThemeDialog) {
-        AlertDialog(
-            onDismissRequest = { showThemeDialog = false },
-            title = { Text("Select Theme") },
-            text = {
-                Column {
-                    val themes = listOf(0 to "System Default", 1 to "Light", 2 to "Dark")
-                    themes.forEach { (mode, name) ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable {
-                                viewModel.setThemeMode(mode)
-                                showThemeDialog = false
-                            }.padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(name, modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                            if (themeMode == mode) Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF1A73E8))
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showThemeDialog = false }) { Text("Close", fontWeight = FontWeight.Bold) }
+    if (showCustomModel) {
+        CustomModelDialog(
+            onDismiss = { showCustomModel = false },
+            onAdd = { name, id, provider, description ->
+                viewModel.addCustomModel(name, id, provider, description)
+                showCustomModel = false
             }
         )
     }
 }
 
 @Composable
-fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        color = Color.Gray,
-        fontSize = 14.sp,
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+private fun ProviderKeyField(label: String, value: String, onSave: (String) -> Unit) {
+    var draft by remember(value) { mutableStateOf(value) }
+    var visible by remember { mutableStateOf(false) }
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        OutlinedTextField(
+            value = draft,
+            onValueChange = { draft = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(label) },
+            singleLine = true,
+            visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = { visible = !visible }) {
+                    Icon(if (visible) Icons.Default.VisibilityOff else Icons.Default.Visibility, if (visible) "Hide key" else "Show key")
+                }
+            }
+        )
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = { draft = ""; onSave("") }) { Text("Clear") }
+            Button(onClick = { onSave(draft) }, enabled = draft != value) { Text("Save") }
+        }
+    }
+}
+
+@Composable
+private fun ChoiceDialog(title: String, options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Column { options.forEach { (value, label) -> ChoiceRow(label, value == selected) { onSelect(value); onDismiss() } } } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
     )
 }
 
 @Composable
-fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF222222) else Color(0xFFF5F5F5)),
-        content = content
+private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    ListItem(
+        modifier = Modifier.clickable(onClick = onClick),
+        headlineContent = { Text(label) },
+        trailingContent = { if (selected) Icon(Icons.Default.Check, "Selected", tint = MaterialTheme.colorScheme.primary) }
     )
 }
 
 @Composable
-fun SettingsRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String? = null,
-    titleColor: Color = MaterialTheme.colorScheme.onBackground,
-    showDivider: Boolean = true,
-    onClick: (() -> Unit)? = null
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = onClick != null, onClick = onClick ?: {})
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, contentDescription = null, tint = titleColor, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(title, fontSize = 16.sp, color = titleColor, fontWeight = FontWeight.Bold)
-                if (subtitle != null) {
-                    Text(subtitle, fontSize = 14.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+private fun CustomModelDialog(onDismiss: () -> Unit, onAdd: (String, String, String, String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var id by remember { mutableStateOf("") }
+    var provider by remember { mutableStateOf(ProviderType.OPENROUTER) }
+    var description by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add custom model") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true)
+                OutlinedTextField(id, { id = it }, label = { Text("Model ID") }, singleLine = true)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(ProviderType.OPENROUTER, ProviderType.NVIDIA, ProviderType.GEMINI).forEach { item ->
+                        FilterChip(selected = provider == item, onClick = { provider = item }, label = { Text(item.replace("NVIDIA NIM", "NVIDIA")) })
+                    }
                 }
+                OutlinedTextField(description, { description = it }, label = { Text("Description") }, minLines = 2)
             }
-        }
-        if (showDivider) {
-            Divider(modifier = Modifier.padding(start = 56.dp), color = Color(0xFFE0E0E0), thickness = 0.5.dp)
+        },
+        confirmButton = {
+            TextButton(enabled = name.isNotBlank() && id.isNotBlank(), onClick = { onAdd(name.trim(), id.trim(), provider, description.trim()) }) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+private data class CustomModelUi(val name: String, val id: String, val provider: String)
+
+private fun parseCustomModels(json: String): List<CustomModelUi> = try {
+    val array = JSONArray(json)
+    buildList {
+        for (i in 0 until array.length()) {
+            val item = array.optJSONObject(i) ?: continue
+            add(CustomModelUi(item.optString("displayName"), item.optString("modelId"), item.optString("provider")))
         }
     }
+} catch (_: Exception) { emptyList() }
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(text, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 24.dp, top = 18.dp, bottom = 8.dp))
+}
+
+@Composable
+private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) { Column(content = content) }
+}
+
+@Composable
+private fun SettingsRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+    ListItem(
+        modifier = Modifier.clickable(onClick = onClick),
+        leadingContent = { Icon(icon, null) },
+        headlineContent = { Text(title) },
+        supportingContent = { Text(subtitle) },
+        trailingContent = { Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    )
 }

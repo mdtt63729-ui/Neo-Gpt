@@ -1,5 +1,14 @@
 package com.example.ui.chat
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -7,7 +16,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Share
@@ -25,75 +36,72 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.Attachment
+import com.example.data.AttachmentType
 import com.example.data.Message
 
 @Composable
 fun MessageBubble(message: Message, textSize: Float = 16f) {
-    var expanded by remember { mutableStateOf(false) }
-
     Column(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
         horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start
     ) {
         if (message.isUser) {
-            Box(
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(Color(0xFFE8F0FE))
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             ) {
-                Text(text = message.text, fontSize = textSize.sp, color = Color.Black)
+                Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
+                    if (!message.imageUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = message.imageUrl,
+                            contentDescription = "Attached image",
+                            modifier = Modifier.sizeIn(maxWidth = 240.dp, maxHeight = 240.dp).clip(RoundedCornerShape(14.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                        if (message.text.isNotBlank()) Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    Text(message.text, fontSize = textSize.sp)
+                    if (message.attachmentName != null && message.imageUrl == null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "📎 ${message.attachmentName}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.75f)
+                        )
+                    }
+                }
             }
         } else {
-            Column(modifier = Modifier.padding(top = 8.dp)) {
+            Column(modifier = Modifier.padding(top = 6.dp)) {
                 if (message.text.isNotBlank()) {
-                    Text(text = message.text, fontSize = textSize.sp, color = MaterialTheme.colorScheme.onBackground)
+                    Text(message.text, fontSize = textSize.sp, color = MaterialTheme.colorScheme.onBackground)
                 }
-                if (message.imageUrl != null) {
+                if (!message.imageUrl.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     AsyncImage(
                         model = message.imageUrl,
-                        contentDescription = "Generated Image",
-                        modifier = Modifier
-                            .fillMaxWidth(0.8f)
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(12.dp)),
+                        contentDescription = "Generated image",
+                        modifier = Modifier.fillMaxWidth(0.82f).aspectRatio(1f).clip(RoundedCornerShape(16.dp)),
                         contentScale = ContentScale.Crop
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = { }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(20.dp), tint = Color.Gray)
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(onClick = { }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Outlined.ThumbUp, contentDescription = "Like", modifier = Modifier.size(20.dp), tint = Color.Gray)
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(onClick = { }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Outlined.ThumbDown, contentDescription = "Dislike", modifier = Modifier.size(20.dp), tint = Color.Gray)
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(onClick = { }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Outlined.VolumeUp, contentDescription = "Speak", modifier = Modifier.size(20.dp), tint = Color.Gray)
-                }
-                Spacer(modifier = Modifier.width(4.dp))
-                IconButton(onClick = { }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Outlined.Share, contentDescription = "Share", modifier = Modifier.size(20.dp), tint = Color.Gray)
-                }
-                Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ContentCopy, "Copy") }
+                IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ThumbUp, "Good response") }
+                IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.ThumbDown, "Bad response") }
+                IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.VolumeUp, "Read aloud") }
+                IconButton(onClick = {}, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.Share, "Share") }
                 Box {
-                    IconButton(onClick = { expanded = true }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Outlined.MoreVert, contentDescription = "More", modifier = Modifier.size(20.dp), tint = Color.Gray)
+                    var expanded by remember { mutableStateOf(false) }
+                    IconButton(onClick = { expanded = true }, modifier = Modifier.size(32.dp)) { Icon(Icons.Outlined.MoreVert, "More") }
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                        DropdownMenuItem(text = { Text("Copy") }, onClick = { expanded = false })
+                        DropdownMenuItem(text = { Text("Share") }, onClick = { expanded = false })
                     }
-                    MessageContextMenu(expanded = expanded, onDismiss = { expanded = false })
                 }
             }
         }
@@ -101,85 +109,147 @@ fun MessageBubble(message: Message, textSize: Float = 16f) {
 }
 
 @Composable
-fun MessageContextMenu(expanded: Boolean, onDismiss: () -> Unit) {
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = onDismiss,
-        modifier = Modifier.background(MaterialTheme.colorScheme.background)
+fun AttachmentPreview(attachment: Attachment, onRemove: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 1.dp
     ) {
-        DropdownMenuItem(text = { Text("Share", color = MaterialTheme.colorScheme.onBackground) }, onClick = onDismiss)
-        DropdownMenuItem(text = { Text("Pin", color = MaterialTheme.colorScheme.onBackground) }, onClick = onDismiss)
-        DropdownMenuItem(text = { Text("Add to project", color = MaterialTheme.colorScheme.onBackground) }, onClick = onDismiss)
-        DropdownMenuItem(text = { Text("Uploaded files", color = MaterialTheme.colorScheme.onBackground) }, onClick = onDismiss)
-        DropdownMenuItem(text = { Text("Find in chat", color = MaterialTheme.colorScheme.onBackground) }, onClick = onDismiss)
-        DropdownMenuItem(text = { Text("Add to home", color = MaterialTheme.colorScheme.onBackground) }, onClick = onDismiss)
-        DropdownMenuItem(text = { Text("Archive", color = MaterialTheme.colorScheme.onBackground) }, onClick = onDismiss)
-        DropdownMenuItem(text = { Text("Delete", color = Color.Red) }, onClick = onDismiss)
+        Row(
+            modifier = Modifier.padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (attachment.type == AttachmentType.IMAGE) {
+                AsyncImage(
+                    model = attachment.uri,
+                    contentDescription = "Selected image",
+                    modifier = Modifier.size(58.dp).clip(RoundedCornerShape(10.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier.size(58.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("FILE", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(attachment.fileName, maxLines = 1, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    "${attachment.mimeType.ifBlank { "File" }} • ${formatBytes(attachment.sizeBytes)}",
+                    maxLines = 1,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onRemove) { Icon(Icons.Default.Close, "Remove attachment") }
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+private fun formatBytes(size: Long): String = when {
+    size < 1024 -> "$size B"
+    size < 1024 * 1024 -> "${size / 1024} KB"
+    else -> "${size / (1024 * 1024)} MB"
+}
+
 @Composable
 fun ChatInputBar(
+    attachments: List<Attachment>,
+    requestState: ChatRequestState,
     onSendMessage: (String) -> Unit,
+    onStop: () -> Unit,
     onAttachClick: () -> Unit,
-    onVoiceClick: () -> Unit
+    onVoiceClick: () -> Unit,
+    onRemoveAttachment: (Attachment) -> Unit
 ) {
     var text by remember { mutableStateOf("") }
+    val active = requestState is ChatRequestState.Thinking || requestState is ChatRequestState.Streaming
+    val canSend = text.isNotBlank() || attachments.isNotEmpty()
+    val action = when {
+        active -> ComposerAction.STOP
+        canSend -> ComposerAction.SEND
+        else -> ComposerAction.CONVERSATION
+    }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-            .background(if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF333333) else Color(0xFFF0F0F0), RoundedCornerShape(32.dp))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        IconButton(onClick = onAttachClick) {
-            Icon(Icons.Default.Add, contentDescription = "Attach", tint = Color.DarkGray)
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        attachments.forEach { attachment ->
+            AttachmentPreview(attachment, onRemove = { onRemoveAttachment(attachment) })
+            Spacer(modifier = Modifier.height(6.dp))
         }
-        
-        TextField(
-            value = text,
-            onValueChange = { text = it },
-            placeholder = { Text("Ask Neo Gpt", color = Color.Gray) },
-            modifier = Modifier.weight(1f),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
-            )
-        )
-
-        if (text.isNotBlank()) {
-            Button(
-                onClick = { 
-                    onSendMessage(text)
-                    text = "" 
-                },
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8)),
-                contentPadding = PaddingValues(0.dp),
-                modifier = Modifier.size(40.dp)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 1.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(start = 6.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.Bottom
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Send") // Using Add as placeholder for Send arrow
-            }
-        } else {
-            IconButton(onClick = { }) {
-                Icon(Icons.Default.Mic, contentDescription = "Mic", tint = Color.DarkGray)
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-            Button(
-                onClick = onVoiceClick,
-                shape = CircleShape,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1A73E8)),
-                contentPadding = PaddingValues(0.dp),
-                modifier = Modifier.size(40.dp)
-            ) {
-                // Using VolumeUp as placeholder for AudioLines/Conversation icon
-                Icon(Icons.Outlined.VolumeUp, contentDescription = "Voice Conversation", modifier = Modifier.size(20.dp))
+                IconButton(onClick = onAttachClick, enabled = !active) {
+                    Icon(Icons.Default.Add, "Attach")
+                }
+                TextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Ask Neo Gpt") },
+                    minLines = 1,
+                    maxLines = 5,
+                    enabled = !active,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent
+                    )
+                )
+                AnimatedContent(
+                    targetState = action,
+                    transitionSpec = {
+                        (fadeIn() + slideInHorizontally { it / 2 } + scaleIn(initialScale = 0.82f)) togetherWith
+                            (fadeOut() + slideOutHorizontally { -it / 2 } + scaleOut(targetScale = 0.82f)) using
+                            SizeTransform(clip = false)
+                    },
+                    label = "composer-action"
+                ) { current ->
+                    FilledIconButton(
+                        onClick = when (current) {
+                            ComposerAction.STOP -> onStop
+                            ComposerAction.SEND -> {
+                                {
+                                    val outgoing = text
+                                    text = ""
+                                    onSendMessage(outgoing)
+                                }
+                            }
+                            ComposerAction.CONVERSATION -> onVoiceClick
+                        },
+                        modifier = Modifier.size(44.dp),
+                        enabled = true
+                    ) {
+                        Icon(
+                            when (current) {
+                                ComposerAction.STOP -> Icons.Default.Stop
+                                ComposerAction.SEND -> Icons.Default.Send
+                                ComposerAction.CONVERSATION -> Icons.Outlined.VolumeUp
+                            },
+                            contentDescription = when (current) {
+                                ComposerAction.STOP -> "Stop generation"
+                                ComposerAction.SEND -> "Send message"
+                                ComposerAction.CONVERSATION -> "Voice conversation"
+                            }
+                        )
+                    }
+                }
             }
         }
     }
 }
+
+enum class ComposerAction { CONVERSATION, SEND, STOP }

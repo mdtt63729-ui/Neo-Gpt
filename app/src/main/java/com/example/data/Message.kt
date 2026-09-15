@@ -10,5 +10,9 @@ data class Message(
     val isUser: Boolean,
     val imageUrl: String? = null,
     val timestamp: Long = System.currentTimeMillis(),
-    val userId: String = "default"
+    val userId: String = "default",
+    val attachmentUri: String? = null,
+    val attachmentName: String? = null,
+    val attachmentMimeType: String? = null,
+    val attachmentSizeBytes: Long? = null
 )
