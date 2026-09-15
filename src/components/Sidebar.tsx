@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, RefreshCw, Image as ImageIcon, Library, Folder, Clock, Puzzle, MessageSquare, Edit2, Settings as SettingsIcon } from 'lucide-react';
+import { Search, Image as ImageIcon, Library, Folder, Clock, Puzzle, Edit2, Settings as SettingsIcon, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface SidebarProps {
@@ -10,9 +10,10 @@ interface SidebarProps {
   onNewChat: () => void;
   chatHistory: { id: string; title: string }[];
   onSelectChat: (id: string) => void;
+  onDeleteChat: (id: string) => void;
 }
 
-export function Sidebar({ isOpen, onClose, onOpenSettings, onNewChat, chatHistory, onSelectChat }: SidebarProps) {
+export function Sidebar({ isOpen, onClose, onOpenSettings, onNewChat, chatHistory, onSelectChat, onDeleteChat }: SidebarProps) {
   const notify = (message: string) => {
     window.dispatchEvent(new CustomEvent('neo-gpt-toast', { detail: message }));
   };
@@ -76,15 +77,25 @@ export function Sidebar({ isOpen, onClose, onOpenSettings, onNewChat, chatHistor
                   ) : (
                     <div className="space-y-1">
                       {chatHistory.map(chat => (
-                        <motion.button
-                          type="button"
-                          key={chat.id}
-                          whileTap={{ scale: 0.97 }}
-                          onClick={() => onSelectChat(chat.id)}
-                          className="w-full text-left px-3 py-3 rounded-2xl hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors"
-                        >
-                          <div className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">{chat.title}</div>
-                        </motion.button>
+                        <div key={chat.id} className="flex items-center gap-1 rounded-2xl hover:bg-gray-50 dark:hover:bg-zinc-800 transition-colors">
+                          <motion.button
+                            type="button"
+                            whileTap={{ scale: 0.97 }}
+                            onClick={() => onSelectChat(chat.id)}
+                            className="flex-1 min-w-0 text-left px-3 py-3 rounded-2xl"
+                          >
+                            <div className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">{chat.title}</div>
+                          </motion.button>
+                          <motion.button
+                            type="button"
+                            whileTap={{ scale: 0.86 }}
+                            aria-label={`Delete ${chat.title}`}
+                            onClick={(event) => { event.stopPropagation(); if (window.confirm(`Delete this chat?`)) onDeleteChat(chat.id); }}
+                            className="p-2.5 mr-1 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex-shrink-0"
+                          >
+                            <Trash2 size={17} />
+                          </motion.button>
+                        </div>
                       ))}
                     </div>
                   )}

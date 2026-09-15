@@ -309,3 +309,23 @@ button, textarea, input {
 @media (prefers-reduced-motion: reduce) {
   .neo-thinking-clean .neo-thinking-label { animation: none; }
 }
+
+/* Stable mobile chrome: the top controls never move with the chat scroll or keyboard. */
+.neo-topbar {
+  position: relative;
+  z-index: 40;
+  flex-shrink: 0;
+  background: #fff;
+  isolation: isolate;
+}
+.dark .neo-topbar { background: #121212; }
+.neo-topbar > * { position: relative; z-index: 2; }
+.neo-welcome-title { will-change: transform, opacity; }
+
+/* The dictation waveform lives inside the composer; it never creates a page overlay. */
+.neo-bottom-shell form { overflow: visible; }
+.neo-bottom-shell form:has(.neo-dictation-inline) { position: relative; }
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-welcome-title { animation: none; }
+}

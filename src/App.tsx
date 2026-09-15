@@ -82,25 +82,72 @@ const RESPONSE_FORMAT_INSTRUCTION = `Format your answer for a mobile chat UI usi
 
 function renderInlineMarkdown(text: string, keyPrefix = 'i'): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
-  const pattern = /(\*\*|__)(.+?)\1|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)|(\*|_)([^*_]+?)\7/g;
-  let last = 0;
-  let match: RegExpExecArray | null;
+  const source = text.replace(/\\([*_~`])/g, '$1');
+  let buffer = '';
   let key = 0;
-  while ((match = pattern.exec(text))) {
-    if (match.index > last) nodes.push(text.slice(last, match.index));
-    if (match[1]) nodes.push(<strong key={`${keyPrefix}-b-${key++}`}>{renderInlineMarkdown(match[2], `${keyPrefix}-b`)}</strong>);
-    else if (match[3]) nodes.push(<del key={`${keyPrefix}-s-${key++}`}>{renderInlineMarkdown(match[3], `${keyPrefix}-s`)}</del>);
-    else if (match[4]) nodes.push(<code key={`${keyPrefix}-c-${key++}`} className="neo-inline-code">{match[4]}</code>);
-    else if (match[5]) nodes.push(<a key={`${keyPrefix}-a-${key++}`} href={match[6]} target="_blank" rel="noreferrer" className="neo-markdown-link">{renderInlineMarkdown(match[5], `${keyPrefix}-a`)}</a>);
-    else if (match[8]) nodes.push(<em key={`${keyPrefix}-e-${key++}`}>{renderInlineMarkdown(match[8], `${keyPrefix}-e`)}</em>);
-    last = match.index + match[0].length;
+  const pushText = () => { if (buffer) { nodes.push(buffer); buffer = ''; } };
+
+  for (let i = 0; i < source.length;) {
+    if (source.startsWith('**', i) || source.startsWith('__', i)) {
+      const marker = source.slice(i, i + 2);
+      const close = source.indexOf(marker, i + 2);
+      if (close > i + 2) {
+        pushText();
+        nodes.push(<strong key={`${keyPrefix}-b-${key++}`}>{renderInlineMarkdown(source.slice(i + 2, close), `${keyPrefix}-b`)}</strong>);
+        i = close + 2;
+        continue;
+      }
+    }
+    if (source.startsWith('~~', i)) {
+      const close = source.indexOf('~~', i + 2);
+      if (close > i + 2) {
+        pushText();
+        nodes.push(<del key={`${keyPrefix}-s-${key++}`}>{renderInlineMarkdown(source.slice(i + 2, close), `${keyPrefix}-s`)}</del>);
+        i = close + 2;
+        continue;
+      }
+    }
+    if (source[i] === '`') {
+      const close = source.indexOf('`', i + 1);
+      if (close > i + 1) {
+        pushText();
+        nodes.push(<code key={`${keyPrefix}-c-${key++}`} className="neo-inline-code">{source.slice(i + 1, close)}</code>);
+        i = close + 1;
+        continue;
+      }
+    }
+    if (source[i] === '[') {
+      const labelEnd = source.indexOf('](', i + 1);
+      if (labelEnd > i) {
+        const urlEnd = source.indexOf(')', labelEnd + 2);
+        const url = source.slice(labelEnd + 2, urlEnd);
+        if (urlEnd > labelEnd && /^https?:\/\//i.test(url)) {
+          pushText();
+          nodes.push(<a key={`${keyPrefix}-a-${key++}`} href={url} target="_blank" rel="noreferrer" className="neo-markdown-link">{renderInlineMarkdown(source.slice(i + 1, labelEnd), `${keyPrefix}-a`)}</a>);
+          i = urlEnd + 1;
+          continue;
+        }
+      }
+    }
+    if (source[i] === '*' || source[i] === '_') {
+      const marker = source[i];
+      const close = source.indexOf(marker, i + 1);
+      if (close > i + 1 && !/\\s/.test(source[i + 1])) {
+        pushText();
+        nodes.push(<em key={`${keyPrefix}-e-${key++}`}>{renderInlineMarkdown(source.slice(i + 1, close), `${keyPrefix}-e`)}</em>);
+        i = close + 1;
+        continue;
+      }
+    }
+    buffer += source[i];
+    i += 1;
   }
-  if (last < text.length) nodes.push(text.slice(last));
+  pushText();
   return nodes;
 }
 
 function renderMarkdown(text: string): React.ReactNode {
-  const normalized = text.replace(/\r\n?/g, '\n');
+  const normalized = text.replace(/\r\n?/g, '\n').replace(/\\([*_~`])/g, '$1');
   const lines = normalized.split('\n');
   const blocks: React.ReactNode[] = [];
   let codeLines: string[] | null = null;
@@ -115,10 +162,11 @@ function renderMarkdown(text: string): React.ReactNode {
       <Tag key={`list-${blocks.length}`} className="neo-markdown-list">
         {listItems.map((item, index) => {
           const colon = item.text.indexOf(':');
-          const shouldHighlightTitle = colon > 1 && colon < 70 && !item.text.slice(0, colon).includes('http');
+          const title = colon > 1 && colon < 70 ? item.text.slice(0, colon).trim() : '';
+          const shouldHighlightTitle = Boolean(title && !title.includes('http'));
           return (
             <li key={`li-${index}`}>
-              {shouldHighlightTitle ? <><strong>{renderInlineMarkdown(item.text.slice(0, colon))}</strong>{renderInlineMarkdown(item.text.slice(colon))}</> : renderInlineMarkdown(item.text)}
+              {shouldHighlightTitle ? <><strong>{renderInlineMarkdown(title)}</strong>{renderInlineMarkdown(item.text.slice(colon))}</> : renderInlineMarkdown(item.text)}
             </li>
           );
         })}
@@ -131,25 +179,12 @@ function renderMarkdown(text: string): React.ReactNode {
     const trimmed = line.trim();
     if (trimmed.startsWith('```')) {
       flushList();
-      if (codeLines === null) {
-        codeLines = [];
-        codeLanguage = trimmed.slice(3).trim();
-      } else {
-        blocks.push(<pre key={`code-${index}`} className="neo-code-block"><code data-language={codeLanguage || undefined}>{codeLines.join('\n')}</code></pre>);
-        codeLines = null;
-        codeLanguage = '';
-      }
+      if (codeLines === null) { codeLines = []; codeLanguage = trimmed.slice(3).trim(); }
+      else { blocks.push(<pre key={`code-${index}`} className="neo-code-block"><code data-language={codeLanguage || undefined}>{codeLines.join('\n')}</code></pre>); codeLines = null; codeLanguage = ''; }
       return;
     }
-    if (codeLines !== null) {
-      codeLines.push(line);
-      return;
-    }
-    if (!trimmed) {
-      flushList();
-      return;
-    }
-
+    if (codeLines !== null) { codeLines.push(line); return; }
+    if (!trimmed) { flushList(); return; }
     const unordered = /^(?:[-*•])\s+(.+)$/.exec(trimmed);
     const ordered = /^(\d+)[.)]\s+(.+)$/.exec(trimmed);
     if (unordered || ordered) {
@@ -160,7 +195,6 @@ function renderMarkdown(text: string): React.ReactNode {
       return;
     }
     flushList();
-
     const heading = /^(#{1,6})\s+(.+)$/.exec(trimmed);
     if (heading) {
       const level = Math.min(heading[1].length, 6);
@@ -169,14 +203,9 @@ function renderMarkdown(text: string): React.ReactNode {
       return;
     }
     const quote = /^>\s?(.*)$/.exec(trimmed);
-    if (quote) {
-      blocks.push(<blockquote key={`q-${index}`} className="neo-markdown-quote">{renderInlineMarkdown(quote[1], `q-${index}`)}</blockquote>);
-      return;
-    }
-
+    if (quote) { blocks.push(<blockquote key={`q-${index}`} className="neo-markdown-quote">{renderInlineMarkdown(quote[1], `q-${index}`)}</blockquote>); return; }
     blocks.push(<p key={`p-${index}`} className="neo-markdown-p">{renderInlineMarkdown(trimmed, `p-${index}`)}</p>);
   });
-
   if (codeLines !== null) blocks.push(<pre key="code-final" className="neo-code-block"><code data-language={codeLanguage || undefined}>{codeLines.join('\n')}</code></pre>);
   flushList();
   return <div className="neo-markdown">{blocks}</div>;
@@ -193,6 +222,20 @@ function getInitialTheme(): 'light' | 'dark' {
     // Ignore malformed persisted settings and use the light theme.
   }
   return 'light';
+}
+
+function getWelcomeMessage(): string {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) {
+    return ['Good morning', 'Good morning, how can I help?', 'Ready when you are'].at(Math.floor(Math.random() * 3)) || 'Good morning';
+  }
+  if (hour >= 12 && hour < 17) {
+    return ['Good afternoon', 'How can I help you today?', 'What would you like to explore?'].at(Math.floor(Math.random() * 3)) || 'Good afternoon';
+  }
+  if (hour >= 17 && hour < 22) {
+    return ['Good evening', 'What can I help you with?', 'Ready for your next idea?'].at(Math.floor(Math.random() * 3)) || 'Good evening';
+  }
+  return ['Good night', 'Need a hand before you go?', 'What can I help you with?'].at(Math.floor(Math.random() * 3)) || 'Good night';
 }
 
 export default function App() {
@@ -222,6 +265,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState('venus-3.1');
   
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [welcomeMessage, setWelcomeMessage] = useState<string>(() => getWelcomeMessage());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -538,14 +582,22 @@ export default function App() {
 
   return (
     <div className={theme}>
-      <div className={cn(
+      <motion.div
+        initial={{ opacity: 0, y: 8, scale: 0.995 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
+        className={cn(
         "flex flex-col h-[100dvh] w-full bg-white dark:bg-[#121212] overflow-hidden relative shadow-2xl",
         fontFamily === 'inter' ? 'font-inter' : 'font-josefin',
         // Mobile constraint wrapper
         "max-w-[480px] mx-auto border-x border-gray-100 dark:border-zinc-800"
       )}>
         {/* Top Bar */}
-        <header className="neo-topbar flex items-center justify-between px-4 pb-3 z-10 dark:bg-[#121212]">
+        <motion.header
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, ease: 'easeOut', delay: 0.04 }}
+          className="neo-topbar flex-shrink-0 flex items-center justify-between px-4 pb-3 z-40 dark:bg-[#121212]">
           <div className="flex items-center gap-3">
             <motion.button 
               type="button"
@@ -606,7 +658,8 @@ export default function App() {
             </div>
           </div>
 
-          <motion.button 
+          {activeChatId && <motion.button 
+            type="button"
             whileTap={{ scale: 0.9 }}
             onClick={() => { 
               setIsIncognito(!isIncognito); 
@@ -620,15 +673,30 @@ export default function App() {
             )}
           >
             {isIncognito ? <EyeOff size={20} /> : <Eye size={20} />}
-          </motion.button>
-        </header>
+          </motion.button>}
+        </motion.header>
 
         {/* Main Chat Area */}
-        <main ref={chatContainerRef} className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-28 pt-2 dark:bg-[#121212] neo-content-fade">
+        <motion.main
+          ref={chatContainerRef}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.46, ease: [0.22, 1, 0.36, 1], delay: 0.09 }}
+          className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-28 pt-2 dark:bg-[#121212] neo-content-fade">
           {messages.length === 0 && !isLoading && (
-            <div className="h-full flex flex-col items-center justify-center text-center px-4">
-              <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200 tracking-tight">How can I help you today?</h1>
-            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 44, scale: 0.94 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 15, mass: 0.75, delay: 0.08 }}
+              className="h-full flex flex-col items-center justify-center text-center px-4"
+            >
+              <motion.h1
+                initial={{ opacity: 0, y: 28 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
+                className="text-2xl font-bold text-gray-800 dark:text-gray-200 tracking-tight neo-welcome-title"
+              >{welcomeMessage}</motion.h1>
+            </motion.div>
           )}
           
           <div className="flex flex-col gap-6">
@@ -707,10 +775,14 @@ export default function App() {
             )}
             <div ref={messagesEndRef} className="h-4" />
           </div>
-        </main>
+        </motion.main>
 
         {/* Bottom Input Area */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-[#121212] dark:via-[#121212]/95 pt-6 px-4 z-20 neo-bottom-shell">
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.44, ease: [0.22, 1, 0.36, 1], delay: 0.13 }}
+          className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-[#121212] dark:via-[#121212]/95 pt-6 px-4 z-20 neo-bottom-shell">
           <input type="file" ref={cameraInputRef} onChange={handleFileUpload} accept="image/*" capture="environment" className="hidden" />
           <input type="file" ref={photoInputRef} onChange={handleFileUpload} accept="image/*" multiple className="hidden" />
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*,.pdf,.txt,.md,.json,.csv,.doc,.docx" multiple className="hidden" />
@@ -788,7 +860,17 @@ export default function App() {
               <Plus size={24} />
             </motion.button>
             
-            <textarea
+            {isDictationOpen ? (
+              <DictationModal
+                isOpen={isDictationOpen}
+                inline
+                onClose={() => setIsDictationOpen(false)}
+                onTranscript={(text) => setInput(text)}
+                onComplete={() => {
+                  setTimeout(() => inputRef.current?.focus(), 100);
+                }}
+              />
+            ) : <textarea
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -797,13 +879,13 @@ export default function App() {
               rows={1}
               className="flex-1 bg-transparent border-none outline-none resize-none max-h-32 py-3.5 px-2 text-gray-800 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 font-medium text-[16px] flex items-center"
               style={{ minHeight: '52px' }}
-            />
+            />}
 
             <div className="flex items-center gap-1 pr-1 flex-shrink-0">
               <motion.button 
                 whileTap={{ scale: 0.9 }} 
                 type="button" 
-                onClick={() => setIsDictationOpen(true)}
+                onClick={() => { setIsAttachmentOpen(false); setIsModelSelectOpen(false); setIsDictationOpen(true); }}
                 className="p-3 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700"
               >
                 <Mic size={22} />
@@ -842,7 +924,7 @@ export default function App() {
               )}
             </div>
           </form>
-        </div>
+        </motion.div>
 
         {/* Global Toast */}
         <AnimatePresence>
@@ -864,6 +946,11 @@ export default function App() {
           onClose={() => setIsSidebarOpen(false)} 
           onOpenSettings={() => setIsSettingsOpen(true)}
           chatHistory={chatHistory}
+          onDeleteChat={(id) => {
+            setChatHistory(prev => prev.filter(chat => chat.id !== id));
+            if (activeChatId === id) { setActiveChatId(null); setMessages([]); setInput(''); setPendingAttachments([]); setWelcomeMessage(getWelcomeMessage()); }
+            showToast('Chat deleted');
+          }}
           onSelectChat={(id) => {
             const chat = chatHistory.find(item => item.id === id);
             if (!chat) return;
@@ -872,7 +959,7 @@ export default function App() {
             setInput('');
             setIsSidebarOpen(false);
           }}
-          onNewChat={() => { setMessages([]); setActiveChatId(null); setInput(''); setIsSidebarOpen(false); setIsAttachmentOpen(false); setIsModelSelectOpen(false); showToast('New chat started'); }}
+          onNewChat={() => { setMessages([]); setActiveChatId(null); setInput(''); setPendingAttachments([]); setIsDictationOpen(false); setIsSidebarOpen(false); setIsAttachmentOpen(false); setIsModelSelectOpen(false); setWelcomeMessage(getWelcomeMessage()); showToast('New chat started'); }}
         />
         
         <Settings 
@@ -899,17 +986,6 @@ export default function App() {
           onSilenceSubmit={() => {
             setTimeout(() => {
               handleSubmit();
-            }, 100);
-          }}
-        />
-
-        <DictationModal
-          isOpen={isDictationOpen}
-          onClose={() => setIsDictationOpen(false)}
-          onTranscript={(text) => setInput(text)}
-          onComplete={() => {
-            setTimeout(() => {
-              inputRef.current?.focus();
             }, 100);
           }}
         />
@@ -958,7 +1034,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-      </div>
+      </motion.div>
     </div>
   );
 }
