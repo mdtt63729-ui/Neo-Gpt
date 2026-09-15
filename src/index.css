@@ -987,3 +987,155 @@ body { width:100%; min-height:100dvh; height:100dvh; position:fixed; inset:0; }
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
+
+/* ========================= v32 premium startup + stable chrome ========================= */
+.neo-premium-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  width: 100%;
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #121212;
+}
+.neo-premium-splash-logo {
+  width: clamp(84px, 24vw, 124px);
+  height: clamp(84px, 24vw, 124px);
+  object-fit: contain;
+  display: block;
+  will-change: transform, opacity;
+}
+.neo-screen-transition { width: 100%; height: 100dvh; }
+
+/* The chat shell is a viewport canvas. Header and composer overlay the single
+   chat scroll surface instead of participating in page layout. */
+.neo-launch-shell {
+  display: block !important;
+  position: relative !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  min-height: 100dvh !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+  contain: layout paint;
+}
+.neo-topbar {
+  position: fixed !important;
+  inset: 0 0 auto 0 !important;
+  height: calc(env(safe-area-inset-top, 0px) + 72px) !important;
+  min-height: 0 !important;
+  padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  z-index: 130 !important;
+}
+.neo-topbar::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 -28px 0;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(255,255,255,.20), rgba(255,255,255,.07) 42%, transparent 100%);
+  opacity: .62;
+}
+.dark .neo-topbar::after {
+  background: linear-gradient(to bottom, rgba(18,18,18,.28), rgba(18,18,18,.10) 42%, transparent 100%);
+}
+.neo-chat-scroll {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 78px) !important;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 116px) !important;
+  scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 78px);
+  scroll-padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 116px);
+}
+.neo-bottom-shell {
+  position: fixed !important;
+  inset: auto 0 0 0 !important;
+  z-index: 120 !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding: 0 12px calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.neo-bottom-shell::before {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 132px;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(255,255,255,.24), rgba(255,255,255,.09) 45%, transparent 100%);
+}
+.dark .neo-bottom-shell::before {
+  background: linear-gradient(to top, rgba(18,18,18,.32), rgba(18,18,18,.12) 45%, transparent 100%);
+}
+.neo-bottom-shell form {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  min-height: 56px;
+  background: rgba(247,248,250,.88) !important;
+  border: 1px solid rgba(148,163,184,.20) !important;
+  box-shadow: 0 10px 30px rgba(15,23,42,.10) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  backdrop-filter: blur(12px) saturate(120%);
+}
+.dark .neo-bottom-shell form {
+  background: rgba(39,39,42,.84) !important;
+  border-color: rgba(255,255,255,.09) !important;
+  box-shadow: 0 12px 32px rgba(0,0,0,.25) !important;
+}
+.neo-topbar .neo-hamburger-button,
+.neo-topbar .neo-conversation-action,
+.neo-topbar .neo-login-button {
+  flex: 0 0 42px;
+}
+.neo-topbar .neo-hamburger-button,
+.neo-topbar .neo-conversation-action {
+  width: 42px !important;
+  height: 42px !important;
+  padding: 0 !important;
+  background: rgba(255,255,255,.46) !important;
+  border: 1px solid rgba(148,163,184,.14) !important;
+  box-shadow: 0 5px 18px rgba(15,23,42,.06) !important;
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+}
+.dark .neo-topbar .neo-hamburger-button,
+.dark .neo-topbar .neo-conversation-action {
+  background: rgba(39,39,42,.50) !important;
+  border-color: rgba(255,255,255,.08) !important;
+}
+.neo-topbar .neo-model-selector,
+.neo-topbar .neo-model-button { max-width: min(46vw, 230px); min-width: 0; }
+.neo-topbar .neo-model-selector span,
+.neo-topbar .neo-model-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.neo-topbar button { transform: translateZ(0); }
+.neo-bottom-shell form:focus-within { box-shadow: 0 10px 30px rgba(15,23,42,.10), 0 0 0 2px rgba(59,130,246,.06) !important; }
+.neo-dictation-inline { position: absolute !important; inset: 0 !important; }
+
+@media (max-width: 640px) {
+  .neo-topbar { padding-left: 9px !important; padding-right: 9px !important; }
+  .neo-chat-scroll { padding-left: 0 !important; padding-right: 0 !important; }
+  .neo-bottom-shell { padding-left: 10px !important; padding-right: 10px !important; }
+  .neo-bottom-shell form { border-radius: 29px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .neo-premium-splash-logo { animation: none !important; }
+  .neo-bottom-shell form { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

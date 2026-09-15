@@ -63,7 +63,8 @@ export function DictationModal({ isOpen, onClose, onTranscript, onComplete, inli
     clearSilenceTimer();
     try { recognitionRef.current?.stop(); } catch {}
     recognitionRef.current = null;
-    try { recorderRef.current?.stop(); } catch {}
+    const activeRecorder = recorderRef.current;
+    if (activeRecorder && activeRecorder.state !== 'inactive') { try { activeRecorder.stop(); } catch {} }
     recorderRef.current = null;
     stopTracks();
     stopMeterOnly();
@@ -184,6 +185,7 @@ export function DictationModal({ isOpen, onClose, onTranscript, onComplete, inli
         setLevel(next);
         if (next > 0.085) {
           hasSpokenRef.current = true;
+          setLevel(0.32);
           armSilenceTimer();
         }
         rafRef.current = requestAnimationFrame(tick);
@@ -195,6 +197,8 @@ export function DictationModal({ isOpen, onClose, onTranscript, onComplete, inli
   };
 
   const startRecorderFallback = async () => {
+    try { recognitionRef.current?.stop(); } catch {}
+    recognitionRef.current = null;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       window.dispatchEvent(new CustomEvent('neo-gpt-toast', { detail: 'Microphone recording is not available on this device.' }));
       onComplete();
@@ -206,7 +210,6 @@ export function DictationModal({ isOpen, onClose, onTranscript, onComplete, inli
       stopMeterOnly();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       streamRef.current = stream;
-      startAudioMeter(stream);
       chunksRef.current = [];
       const preferred = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus'].find(type => MediaRecorder.isTypeSupported?.(type));
       const recorder = preferred ? new MediaRecorder(stream, { mimeType: preferred }) : new MediaRecorder(stream);
@@ -262,6 +265,7 @@ export function DictationModal({ isOpen, onClose, onTranscript, onComplete, inli
         interimTextRef.current = interim;
         if (finalTextRef.current || interimTextRef.current) {
           hasSpokenRef.current = true;
+          setLevel(0.32);
           armSilenceTimer();
         }
       };
@@ -288,16 +292,6 @@ export function DictationModal({ isOpen, onClose, onTranscript, onComplete, inli
     } catch {
       void startRecorderFallback();
     }
-
-    // The audio meter is best-effort and separately guarded from recognition.
-    const meterPromise = navigator.mediaDevices?.getUserMedia
-      ? navigator.mediaDevices.getUserMedia({ audio: true })
-      : Promise.reject(new Error('Microphone API unavailable'));
-    void meterPromise.then(stream => {
-      if (disposed) { stream.getTracks().forEach(track => track.stop()); return; }
-      streamRef.current = stream;
-      startAudioMeter(stream);
-    }).catch(() => {});
 
     return () => {
       disposed = true;

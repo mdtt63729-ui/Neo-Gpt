@@ -18,15 +18,12 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-// The native splash hands off as soon as Firebase has produced the first
-// definitive auth state. This prevents a white/N placeholder frame while still
-// keeping auth restoration out of the visible React UI.
+// Native splash is never tied to Firebase/network. Hand it to the React
+// premium splash as soon as the first React paint is ready.
 if (typeof window !== 'undefined') {
-  let hidden = false;
-  const hideNativeSplash = () => {
-    if (hidden) return;
-    hidden = true;
-    SplashScreen.hide({ fadeOutDuration: 160 }).catch(() => undefined);
-  };
-  window.addEventListener('neo-gpt-auth-ready', hideNativeSplash, { once: true });
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      SplashScreen.hide({ fadeOutDuration: 180 }).catch(() => undefined);
+    });
+  });
 }

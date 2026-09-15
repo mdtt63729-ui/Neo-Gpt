@@ -281,7 +281,9 @@ export default function App() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isHeaderMoreOpen, setIsHeaderMoreOpen] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(52);
-  const [authState, setAuthState] = useState<'loading' | 'authenticated' | 'guest' | 'unauthenticated'>(() => localStorage.getItem('neo-gpt-guest-mode') === '1' ? 'guest' : 'loading');
+  const [authState, setAuthState] = useState<'loading' | 'authenticated' | 'guest' | 'unauthenticated'>('loading');
+  const [splashComplete, setSplashComplete] = useState(false);
+  const [splashExiting, setSplashExiting] = useState(false);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authPromptFromGuest, setAuthPromptFromGuest] = useState(false);
   const [isNearChatBottom, setIsNearChatBottom] = useState(true);
@@ -406,9 +408,18 @@ export default function App() {
     return () => { cancelled = true; unsubscribe?.(); };
   }, []);
 
+  // Premium web splash runs independently of Firebase/network. Auth restoration
+  // happens concurrently and only decides the destination after the splash.
   useEffect(() => {
-    if (authState !== 'loading') window.dispatchEvent(new Event('neo-gpt-auth-ready'));
-  }, [authState]);
+    let cancelled = false;
+    const started = performance.now();
+    const timer = window.setTimeout(() => {
+      if (cancelled) return;
+      setSplashExiting(true);
+      window.setTimeout(() => { if (!cancelled) setSplashComplete(true); }, 340);
+    }, Math.max(0, 3000 - (performance.now() - started)));
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('neo-gpt-settings');
@@ -892,9 +903,22 @@ export default function App() {
     return result;
   };
 
-  if (authState === 'loading') return null;
+  if (!splashComplete || authState === 'loading') {
+    return (
+      <motion.main className="neo-premium-splash" initial={{ opacity: 1 }} animate={splashExiting ? { opacity: 0 } : { opacity: 1 }} transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }} aria-label="Neo Gpt loading">
+        <motion.img
+          src="/neo-gpt-icon.svg"
+          alt="Neo Gpt"
+          className="neo-premium-splash-logo"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: [1, 1.018, 1] }}
+          transition={{ opacity: { duration: 0.28, ease: [0.22, 1, 0.36, 1] }, scale: { duration: 2.2, ease: 'easeInOut', repeat: Infinity } }}
+        />
+      </motion.main>
+    );
+  }
   if (authState === 'unauthenticated') {
-    return <AuthScreen onAuthenticated={handleAuthenticated} onSkip={handleGuest} onCancel={authPromptFromGuest ? cancelLogin : undefined} />;
+    return <motion.div className="neo-screen-transition" initial={{ opacity: 0, y: 10, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}><AuthScreen onAuthenticated={handleAuthenticated} onSkip={handleGuest} onCancel={authPromptFromGuest ? cancelLogin : undefined} /></motion.div>;
   }
 
   const logout = async () => {
@@ -905,7 +929,7 @@ export default function App() {
   };
 
   return (
-    <>
+    <motion.div className="neo-screen-transition" initial={{ opacity: 0, y: 8, scale: 0.992 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.30, ease: [0.22, 1, 0.36, 1] }}>
     <div className={theme}>
       <div className={cn(
         "grid grid-rows-[auto_minmax(0,1fr)_auto] h-[100dvh] w-full bg-white dark:bg-[#121212] overflow-hidden relative shadow-2xl neo-launch-shell",
@@ -1000,10 +1024,10 @@ export default function App() {
             {authState === 'guest' ? (
               <motion.button type="button" whileTap={{ scale: 0.96 }} onClick={openLogin} className="neo-login-button" aria-label="Log in">Log in</motion.button>
             ) : (
-              <motion.button type="button" layout whileTap={{ scale: 0.9 }} onClick={() => { haptic('tap'); setMessages([]); setActiveChatId(null); setInput(''); setPendingAttachments([]); setIsDictationOpen(false); setIsAttachmentOpen(false); setIsModelSelectOpen(false); setWelcomeMessage(getWelcomeMessage()); setIsHeaderMoreOpen(false); showToast('New chat started'); }} className="neo-conversation-action" aria-label="New chat" title="New chat"><Plus size={20}/></motion.button>
+              <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={() => { haptic('tap'); setMessages([]); setActiveChatId(null); setInput(''); setPendingAttachments([]); setIsDictationOpen(false); setIsAttachmentOpen(false); setIsModelSelectOpen(false); setWelcomeMessage(getWelcomeMessage()); setIsHeaderMoreOpen(false); showToast('New chat started'); }} className="neo-conversation-action" aria-label="New chat" title="New chat"><Plus size={20}/></motion.button>
             )}
             <div className="relative">
-              <motion.button type="button" layout whileTap={{ scale: 0.9 }} onClick={() => { haptic('tap'); setIsHeaderMoreOpen(v => !v); }} className="neo-conversation-action" aria-label="More options" aria-expanded={isHeaderMoreOpen} title="More options"><MoreVertical size={20}/></motion.button>
+              <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={() => { haptic('tap'); setIsHeaderMoreOpen(v => !v); }} className="neo-conversation-action" aria-label="More options" aria-expanded={isHeaderMoreOpen} title="More options"><MoreVertical size={20}/></motion.button>
               <AnimatePresence>
                 {isHeaderMoreOpen && (
                   <>
@@ -1225,10 +1249,9 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          <motion.form layout onSubmit={handleSubmit} className="relative flex items-center bg-[#f4f4f5] dark:bg-zinc-800/80 rounded-[32px] px-2 py-1.5 shadow-sm border border-gray-100 dark:border-zinc-700 transition-all focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/50 focus-within:border-blue-200 dark:focus-within:border-blue-800">
+          <motion.form onSubmit={handleSubmit} className="relative flex items-center bg-[#f4f4f5] dark:bg-zinc-800/80 rounded-[32px] px-2 py-1.5 shadow-sm border border-gray-100 dark:border-zinc-700 transition-all focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/50 focus-within:border-blue-200 dark:focus-within:border-blue-800">
             <motion.button
-              layout
-              whileTap={{ scale: 0.9 }}
+                           whileTap={{ scale: 0.9 }}
               type="button"
               onClick={() => { haptic('tap'); if (authState !== 'authenticated') { requireLogin(); return; } setIsAttachmentOpen(v => !v); }}
               className="p-3 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 flex-shrink-0"
@@ -1259,10 +1282,9 @@ export default function App() {
               style={{ minHeight: '52px', height: `${textareaHeight}px`, maxHeight: `${25 * 8 + 28}px`, transition: 'height 220ms cubic-bezier(.22,1,.36,1)' }}
             />}
 
-            <motion.div layout className="flex items-center gap-1 pr-1 flex-shrink-0">
+            <div className="flex items-center gap-1 pr-1 flex-shrink-0">
               <motion.button
-                layout
-                whileTap={{ scale: 0.9 }}
+                               whileTap={{ scale: 0.9 }}
                 type="button"
                 onClick={() => { haptic('tap'); setIsAttachmentOpen(false); setIsModelSelectOpen(false); setIsDictationOpen(true); }}
                 className="p-3 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700"
@@ -1272,8 +1294,7 @@ export default function App() {
 
               {isLoading ? (
                 <motion.button
-                  layout
-                  whileTap={{ scale: 0.9 }}
+                                   whileTap={{ scale: 0.9 }}
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   type="button"
@@ -1284,8 +1305,7 @@ export default function App() {
                 </motion.button>
               ) : input.trim() || pendingAttachments.length ? (
                 <motion.button
-                  layout
-                  whileTap={{ scale: 0.9 }}
+                                   whileTap={{ scale: 0.9 }}
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   type="submit"
@@ -1295,8 +1315,7 @@ export default function App() {
                 </motion.button>
               ) : (
                 <motion.button
-                  layout
-                  whileTap={{ scale: 0.9 }}
+                                   whileTap={{ scale: 0.9 }}
                   type="button"
                   onClick={() => { haptic('tap'); setIsVoiceOpen(true); }}
                   className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white shadow-sm hover:bg-blue-600 transition-colors ml-1"
@@ -1304,7 +1323,7 @@ export default function App() {
                   <AudioLines size={20} />
                 </motion.button>
               )}
-            </motion.div>
+            </div>
           </motion.form>
         </motion.div>
 
@@ -1423,6 +1442,6 @@ export default function App() {
       </div>
     </div>
     <UpdateGate update={availableUpdate} onDismiss={dismissUpdate} />
-    </>
+    </motion.div>
   );
 }
