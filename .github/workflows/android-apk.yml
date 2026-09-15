@@ -26,21 +26,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Verify repository checkout
+        run: |
+          test -f package.json
+          test -f capacitor.config.ts
+          echo "Repository checkout OK: $GITHUB_WORKSPACE"
+
       - name: Setup Java 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
-          cache: gradle
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install web dependencies
-        run: npm install --no-audit --no-fund
+        run: npm install --no-audit --no-fund --prefer-offline
 
       - name: Build web app
         run: npm run build
@@ -58,6 +62,9 @@ jobs:
 
       - name: Sync Capacitor Android project
         run: npx cap sync android
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Configure optional Firebase Android credentials
         env:
