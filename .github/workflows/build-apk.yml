@@ -26,6 +26,9 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
       - name: Build unsigned release APK
         run: ./gradlew assembleRelease --no-daemon --stacktrace
 
