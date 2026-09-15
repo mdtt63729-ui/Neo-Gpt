@@ -105,7 +105,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     }
 
     if (showFont) {
-        ChoiceDialog("UI Font", listOf("Inter", "Josefin Sans"), font, { viewModel.setFont(it) }) { showFont = false }
+        ChoiceDialog("UI Font", listOf("Inter" to "Inter", "Josefin Sans" to "Josefin Sans"), font, { viewModel.setFont(it) }) { showFont = false }
     }
     if (showTheme) {
         AlertDialog(
