@@ -358,54 +358,92 @@ export default function App() {
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
+    let retryTimer: number | undefined;
+
+    const finishWithoutFirebase = () => {
+      if (cancelled) return;
+      const isGuest = localStorage.getItem('neo-gpt-guest-mode') === '1';
+      setAuthState(isGuest ? 'guest' : 'unauthenticated');
+    };
 
     const restore = async () => {
-      const guestMode = localStorage.getItem('neo-gpt-guest-mode') === '1';
-      if (!firebaseReady()) {
-        if (!cancelled) setAuthState(guestMode ? 'guest' : 'unauthenticated');
+      // Firebase is initialized in parallel with the splash. Never turn an
+      // unknown/loading Firebase state into "signed out" just because the SDK
+      // has not finished initializing yet.
+      let attempts = 0;
+      const waitForFirebase = async (): Promise<boolean> => {
+        while (!cancelled && attempts < 30) {
+          attempts += 1;
+          if (firebaseReady()) return true;
+          await new Promise(resolve => { retryTimer = window.setTimeout(resolve, 100); });
+        }
+        return false;
+      };
+
+      const ready = await waitForFirebase();
+      if (cancelled) return;
+      if (!ready) {
+        // This is an actual initialization failure, not an auth timeout.
+        // Guest remains available; otherwise the email/password screen remains usable.
+        finishWithoutFirebase();
         return;
       }
 
       try {
-        // Firebase Auth is the source of truth. LOCAL persistence restores the
-        // existing account across app closes, force-stops and device restarts.
         const auth = await configureFirebasePersistence();
+        if (cancelled) return;
+
+        // Firebase's first onAuthStateChanged callback is the authoritative
+        // persistence-restoration signal. Do not use a timer as a substitute.
         unsubscribe = onAuthStateChanged(auth, async (user: any) => {
           if (cancelled) return;
           if (!user) {
             const isGuest = localStorage.getItem('neo-gpt-guest-mode') === '1';
-            if (!cancelled) setAuthState(isGuest ? 'guest' : 'unauthenticated');
+            setAuthUser(null);
+            setAuthState(isGuest ? 'guest' : 'unauthenticated');
             return;
           }
 
-          const restoredUser: AuthUser = { id: String(user.uid), email: String(user.email || ''), name: user.displayName || user.email?.split('@')[0], avatarUrl: user.photoURL || undefined };
+          const restoredUser: AuthUser = {
+            id: String(user.uid),
+            email: String(user.email || ''),
+            name: user.displayName || user.email?.split('@')[0],
+            avatarUrl: user.photoURL || undefined,
+          };
           setAuthUser(restoredUser);
           localStorage.removeItem('neo-gpt-guest-mode');
-          setAuthState('authenticated');
+
+          // Firebase Auth user is the source of truth. The cached session is
+          // refreshed from Firebase only; an old local token can never restore auth.
           try {
             const token = await user.getIdToken(true);
             if (cancelled) return;
-            const session: AuthSession = { access_token: token, refresh_token: '', expires_at: Date.now() / 1000 + 3600 };
+            const session: AuthSession = {
+              access_token: token,
+              refresh_token: '',
+              expires_at: Date.now() / 1000 + 3600,
+            };
             localStorage.setItem('neo-gpt-auth-session', JSON.stringify(session));
             authSessionRef.current = session;
           } catch {
-            // Firebase remains the source of truth. A temporary offline token
-            // refresh must never force a valid restored account to Login.
+            // A temporary offline refresh failure must not log the restored
+            // Firebase account out. Firebase keeps the persisted user locally.
           }
+          if (!cancelled) setAuthState('authenticated');
         });
-
-        // No timer can convert an unknown Firebase state into logged-out.
-        // The first onAuthStateChanged callback is the persistence completion signal.
       } catch {
-        if (!cancelled) {
-          const isGuest = localStorage.getItem('neo-gpt-guest-mode') === '1';
-          setAuthState(isGuest ? 'guest' : 'unauthenticated');
-        }
+        // Only a real Firebase initialization failure reaches this path.
+        // Never let a database/network problem break the application shell.
+        finishWithoutFirebase();
       }
     };
 
     restore();
-    return () => { cancelled = true; unsubscribe?.(); };
+    return () => {
+      cancelled = true;
+      if (retryTimer) window.clearTimeout(retryTimer);
+      unsubscribe?.();
+    };
   }, []);
 
   // Premium web splash runs independently of Firebase/network. Auth restoration
