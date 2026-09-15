@@ -39,6 +39,46 @@ jobs:
       - name: Sync Capacitor
         run: bunx cap sync android
 
+      - name: Remove Android launch flash
+        run: |
+          mkdir -p android/app/src/main/res/values android/app/src/main/res/values-v31
+          cat > android/app/src/main/res/values/neo_launch_colors.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <color name="neo_launch_background">#FFFFFF</color>
+          </resources>
+          EOF
+          cat > android/app/src/main/res/values-v31/neo_launch_theme.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <style name="NeoGptLaunchTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+              <item name="android:windowSplashScreenBackground">@color/neo_launch_background</item>
+              <item name="android:windowBackground">@color/neo_launch_background</item>
+              <item name="android:windowLightStatusBar">true</item>
+              <item name="android:statusBarColor">@color/neo_launch_background</item>
+              <item name="android:navigationBarColor">@color/neo_launch_background</item>
+              <item name="android:windowLightNavigationBar">true</item>
+            </style>
+          </resources>
+          EOF
+          cat > android/app/src/main/res/values/neo_launch_theme.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <style name="NeoGptLaunchTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+              <item name="android:windowBackground">@color/neo_launch_background</item>
+              <item name="android:windowLightStatusBar">true</item>
+              <item name="android:statusBarColor">@color/neo_launch_background</item>
+              <item name="android:navigationBarColor">@color/neo_launch_background</item>
+              <item name="android:windowLightNavigationBar">true</item>
+            </style>
+          </resources>
+          EOF
+          # Apply the launch theme to the generated Capacitor activity without replacing its normal app theme.
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if grep -q 'MainActivity' "$MANIFEST" && ! grep -q 'android:theme="@style/NeoGptLaunchTheme"' "$MANIFEST"; then
+            sed -i 's#android:name="\([^"]*MainActivity\)"#android:name="\1" android:theme="@style/NeoGptLaunchTheme"#' "$MANIFEST"
+          fi
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:

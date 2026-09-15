@@ -1,8 +1,16 @@
+export interface MessageAttachment {
+  name: string;
+  type: string;
+  size: number;
+  dataUrl?: string;
+}
+
 export interface Message {
   id: string;
   sender: 'user' | 'ai';
   text?: string;
   imageUrl?: string;
+  attachments?: MessageAttachment[];
   isLoading?: boolean;
 }
 
