@@ -94,6 +94,67 @@ jobs:
           print("Android launch resources: valid XML")
           PY2
 
+      - name: Apply Neo Gpt Material 3 icon and splash icon
+        run: |
+          mkdir -p android/app/src/main/res/drawable android/app/src/main/res/mipmap-anydpi-v26
+          cat > android/app/src/main/res/drawable/neo_gpt_icon_foreground.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+            <path android:fillColor="#FFFFFF" android:pathData="M24,47C24,33.2 35.2,22 49,22h10c13.8,0 25,11.2 25,25v12c0,13.8 -11.2,25 -25,25H47l-16,11c-2.4,1.7 -5.8,-0.2 -5.5,-3.1l1,-9.8C26.1,76.1 24,68.8 24,59z"/>
+            <path android:fillColor="#5B7CFA" android:pathData="M37,51c4.1,-6.1 10.2,-9.2 18,-9.2s13.9,3.1 18,9.2c-4.8,-2.7 -10.8,-4.1 -18,-4.1S41.8,48.3 37,51z"/>
+            <path android:fillColor="#3949AB" android:pathData="M43,59m-2.6,0a2.6,2.6 0,1 1,5.2 0a2.6,2.6 0,1 1,-5.2 0M65,59m-2.6,0a2.6,2.6 0,1 1,5.2 0a2.6,2.6 0,1 1,-5.2 0"/>
+            <path android:fillColor="#3949AB" android:pathData="M42,69 C47.2,73.2 60.8,73.2 66,69" android:strokeWidth="3.5" android:strokeLineCap="round"/>
+            <path android:fillColor="#FFFFFF" android:pathData="M86,21l2,5 5,2 -5,2 -2,5 -2,-5 -5,-2 5,-2z" android:fillAlpha="0.92"/>
+          </vector>
+          EOF
+          cat > android/app/src/main/res/drawable/neo_gpt_splash_icon.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="96dp" android:height="96dp" android:viewportWidth="108" android:viewportHeight="108">
+            <path android:fillColor="#FFFFFF" android:pathData="M24,47C24,33.2 35.2,22 49,22h10c13.8,0 25,11.2 25,25v12c0,13.8 -11.2,25 -25,25H47l-16,11c-2.4,1.7 -5.8,-0.2 -5.5,-3.1l1,-9.8C26.1,76.1 24,68.8 24,59z"/>
+            <path android:fillColor="#8AB4FF" android:pathData="M37,51c4.1,-6.1 10.2,-9.2 18,-9.2s13.9,3.1 18,9.2c-4.8,-2.7 -10.8,-4.1 -18,-4.1S41.8,48.3 37,51z"/>
+            <path android:fillColor="#3949AB" android:pathData="M43,59m-2.6,0a2.6,2.6 0,1 1,5.2 0a2.6,2.6 0,1 1,-5.2 0M65,59m-2.6,0a2.6,2.6 0,1 1,5.2 0a2.6,2.6 0,1 1,-5.2 0"/>
+            <path android:fillColor="#3949AB" android:pathData="M42,69 C47.2,73.2 60.8,73.2 66,69" android:strokeWidth="3.5" android:strokeLineCap="round"/>
+            <path android:fillColor="#FFFFFF" android:pathData="M86,21l2,5 5,2 -5,2 -2,5 -2,-5 -5,-2 5,-2z" android:fillAlpha="0.92"/>
+          </vector>
+          EOF
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/neo_icon_background" />
+            <foreground android:drawable="@drawable/neo_gpt_icon_foreground" />
+          </adaptive-icon>
+          EOF
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/neo_icon_background" />
+            <foreground android:drawable="@drawable/neo_gpt_icon_foreground" />
+          </adaptive-icon>
+          EOF
+          cat > android/app/src/main/res/values/neo_icon_colors.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources><color name="neo_icon_background">#5B7CFA</color></resources>
+          EOF
+          python3 - <<'PY2'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          values = Path('android/app/src/main/res/values')
+          night = Path('android/app/src/main/res/values-night')
+          for path in [values/'neo_icon_colors.xml', Path('android/app/src/main/res/drawable/neo_gpt_icon_foreground.xml'), Path('android/app/src/main/res/drawable/neo_gpt_splash_icon.xml'), Path('android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml'), Path('android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml')]:
+              ET.parse(path)
+          for path in [values/'styles.xml', night/'styles.xml']:
+              text = path.read_text(encoding='utf-8')
+              if 'android:windowSplashScreenAnimatedIcon' not in text:
+                  import re
+                  pattern = re.compile(r'(<style\s+name="AppTheme\.NoActionBarLaunch"[^>]*>)(.*?)(</style>)', re.S)
+                  text, count = pattern.subn(lambda m: m.group(1) + m.group(2) + '  <item name="android:windowSplashScreenAnimatedIcon">@drawable/neo_gpt_splash_icon</item>\n' + m.group(3), text, count=1)
+                  if count != 1:
+                      raise SystemExit(f'Launch style not found in {path}')
+              path.write_text(text, encoding='utf-8')
+              ET.parse(path)
+          print('Neo Gpt icon/splash resources: valid XML')
+          PY2
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:

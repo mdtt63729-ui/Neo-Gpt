@@ -26,15 +26,18 @@ export function Sidebar({ isOpen, onClose, onOpenSettings, onNewChat, chatHistor
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-black/20 z-40 backdrop-blur-sm"
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            onPointerDown={onClose}
+            aria-hidden="true"
+            className="absolute inset-0 bg-black/20 z-[80] backdrop-blur-[2px]"
           />
           <motion.div
-            initial={{ x: '-100%' }}
+            initial={{ x: '-104%' }}
             animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-            className="absolute inset-y-0 left-0 w-[80%] max-w-[320px] bg-white dark:bg-[#121212] z-50 flex flex-col shadow-xl"
+            exit={{ x: '-104%' }}
+            transition={{ type: 'spring', stiffness: 430, damping: 38, mass: 0.72 }}
+            className="absolute inset-y-0 left-0 w-[min(82%,320px)] bg-white dark:bg-[#121212] z-[90] flex flex-col shadow-xl will-change-transform"
+            onPointerDown={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 px-6 neo-sidebar-header">
               <h2 className="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">Neo Gpt</h2>

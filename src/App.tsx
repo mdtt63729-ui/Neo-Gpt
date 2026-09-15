@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Menu, Sparkles, RefreshCw, Plus, Mic, AudioLines, Camera, Image as ImageIcon, Paperclip, Puzzle, BrainCircuit, ArrowUp, Copy, ThumbsUp, ThumbsDown, Speaker, Share2, MoreVertical, X, Download, ChevronDown, Check, Eye, EyeOff, Square } from 'lucide-react';
+import { Sparkles, RefreshCw, Plus, Mic, AudioLines, Camera, Image as ImageIcon, Paperclip, Puzzle, BrainCircuit, ArrowUp, Copy, ThumbsUp, ThumbsDown, Speaker, Share2, MoreVertical, X, Download, ChevronDown, Check, Square } from 'lucide-react';
 import { cn } from './lib/utils';
 import { callApi, testProviderConnection } from './api';
 import { Message, MessageAttachment, ApiKeys, ProviderConfig } from './types';
@@ -85,7 +85,7 @@ function renderInlineMarkdown(text: string, keyPrefix = 'i'): React.ReactNode[] 
   const source = text.replace(/\\([*_~`])/g, '$1');
   let buffer = '';
   let key = 0;
-  const pushText = () => { if (buffer) { nodes.push(buffer); buffer = ''; } };
+  const pushText = () => { if (buffer) { nodes.push(buffer.replace(/\*\*/g, '').replace(/__/g, '').replace(/~~/g, '').replace(/(?<!\w)\*(?!\w)/g, '').replace(/(?<!\w)_(?!\w)/g, '')); buffer = ''; } };
 
   for (let i = 0; i < source.length;) {
     if (source.startsWith('**', i) || source.startsWith('__', i)) {
@@ -250,7 +250,6 @@ export default function App() {
   const [isAttachmentOpen, setIsAttachmentOpen] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<MessageAttachment[]>([]);
   const [isModelSelectOpen, setIsModelSelectOpen] = useState(false);
-  const [isIncognito, setIsIncognito] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<{ id: string; title: string; messages: Message[] }[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -266,6 +265,11 @@ export default function App() {
   
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [welcomeMessage, setWelcomeMessage] = useState<string>(() => getWelcomeMessage());
+  const [launchReady, setLaunchReady] = useState(false);
+  const [moreMenuMessageId, setMoreMenuMessageId] = useState<string | null>(null);
+  const [feedbackByMessage, setFeedbackByMessage] = useState<Record<string, 'up' | 'down' | null>>({});
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [textareaHeight, setTextareaHeight] = useState(52);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -313,6 +317,28 @@ export default function App() {
     if (!settingsHydrated) return;
     localStorage.setItem('neo-gpt-settings', JSON.stringify({ theme, fontFamily, apiKeys, providers, selectedModel }));
   }, [theme, fontFamily, apiKeys, providers, selectedModel, settingsHydrated]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLaunchReady(true), 360);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!inputRef.current) return;
+    const textarea = inputRef.current;
+    textarea.style.height = 'auto';
+    const lineHeight = 25;
+    const maxHeight = lineHeight * 8 + 28;
+    const nextHeight = Math.min(Math.max(textarea.scrollHeight, 52), maxHeight);
+    textarea.style.height = `${nextHeight}px`;
+    setTextareaHeight(nextHeight);
+  }, [input]);
+
+  useEffect(() => {
+    const handlePointer = () => setMoreMenuMessageId(null);
+    window.addEventListener('neo-gpt-close-more', handlePointer);
+    return () => window.removeEventListener('neo-gpt-close-more', handlePointer);
+  }, []);
 
   useEffect(() => {
     try {
@@ -393,37 +419,95 @@ export default function App() {
     return () => window.removeEventListener('neo-gpt-toast', handleExternalToast);
   }, []);
 
-  const handleActionClick = (action: string, text?: string) => {
+  const speakWithGemini = async (text: string) => {
+    const key = apiKeys.gemini?.trim();
+    if (!key) { showToast('Add a Gemini API key in Settings to use Gemini voice.'); return; }
+    try {
+      showToast('Generating Gemini voice…');
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: `Read this naturally and clearly. Keep the original wording.\n\n${text}` }] }],
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }, languageCode: navigator.language || 'en-IN' },
+          },
+        }),
+      });
+      const data = await res.json();
+      const encoded = data?.candidates?.[0]?.content?.parts?.find((part: any) => part?.inlineData?.data)?.inlineData?.data;
+      if (!res.ok || !encoded) throw new Error(data?.error?.message || 'Gemini did not return audio.');
+      const binary = atob(encoded);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const audioContext = new AudioContext();
+      const pcm = new Int16Array(bytes.buffer);
+      const buffer = audioContext.createBuffer(1, pcm.length, 24000);
+      const channel = buffer.getChannelData(0);
+      for (let i = 0; i < pcm.length; i++) channel[i] = pcm[i] / 32768;
+      const source = audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.connect(audioContext.destination);
+      source.onended = () => { void audioContext.close(); };
+      source.start();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Gemini voice playback failed.');
+    }
+  };
+
+  const handleActionClick = (action: string, text?: string, messageId?: string) => {
     if (action === 'copy' && text) {
       navigator.clipboard?.writeText(text).then(() => showToast('Copied to clipboard')).catch(() => showToast('Could not copy text'));
-    } else if (action === 'thumbsUp') {
-      showToast('Thanks for the feedback!');
-    } else if (action === 'thumbsDown') {
-      showToast('Feedback submitted');
+    } else if (action === 'thumbsUp' && messageId) {
+      setFeedbackByMessage(prev => ({ ...prev, [messageId]: prev[messageId] === 'up' ? null : 'up' }));
+    } else if (action === 'thumbsDown' && messageId) {
+      setFeedbackByMessage(prev => ({ ...prev, [messageId]: prev[messageId] === 'down' ? null : 'down' }));
     } else if (action === 'speaker' && text) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-        showToast('Reading response aloud');
-      } else {
-        showToast('Voice playback is not supported here');
-      }
+      void speakWithGemini(text);
     } else if (action === 'share' && text) {
       if (navigator.share) {
         navigator.share({ title: 'Neo Gpt response', text }).catch(() => {});
       } else {
         navigator.clipboard?.writeText(text).then(() => showToast('Response copied for sharing')).catch(() => showToast('Sharing is not supported here'));
       }
-    } else if (action === 'more') {
-      showToast('More actions coming soon');
-    } else {
-      showToast('Action selected');
+    } else if (action === 'more' && messageId) {
+      setMoreMenuMessageId(prev => prev === messageId ? null : messageId);
+    } else if (action === 'plugin') {
+      setIsAttachmentOpen(false); showToast('Plugins are ready for a future provider connection.');
+    } else if (action === 'think') {
+      setIsAttachmentOpen(false); showToast('Thinking mode is enabled for the next request.');
     }
   };
 
+  const regenerateLastResponse = async (messageId: string) => {
+    if (isLoading || isRegenerating) return;
+    const index = messages.findIndex(message => message.id === messageId);
+    if (index < 0) return;
+    const userMessage = [...messages].slice(0, index).reverse().find(message => message.sender === 'user');
+    if (!userMessage) { showToast('Nothing to regenerate yet.'); return; }
+    setIsRegenerating(true);
+    setMoreMenuMessageId(null);
+    setMessages(prev => prev.filter(message => message.id !== messageId));
+    try {
+      const response = await callApi(
+        userMessage.text || '',
+        false,
+        selectedModel,
+        apiKeys,
+        providers.map(p => ({ id: p.id, name: p.name, baseUrl: p.baseUrl, apiKey: p.apiKey, enabled: p.enabled })),
+        userMessage.attachments || [],
+      );
+      setMessages(prev => [...prev, { id: `${Date.now()}-regen`, sender: 'ai', text: response.text || 'No response returned.' }]);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if ((!input.trim() && pendingAttachments.length === 0) || isLoading) return;
+    if ((!input.trim() && pendingAttachments.length === 0) || isLoading || isRegenerating) return;
 
     const userText = input.trim();
     const attachmentsToSend = [...pendingAttachments];
@@ -583,9 +667,9 @@ export default function App() {
   return (
     <div className={theme}>
       <motion.div
-        initial={{ opacity: 0, y: 8, scale: 0.995 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
+        initial={{ opacity: 0, y: 16, scale: 0.985, filter: 'blur(5px)' }}
+        animate={{ opacity: launchReady ? 1 : 0, y: launchReady ? 0 : 16, scale: launchReady ? 1 : 0.985, filter: launchReady ? 'blur(0px)' : 'blur(5px)' }}
+        transition={{ duration: 0.72, ease: [0.16, 1, 0.3, 1], delay: launchReady ? 0 : 0.06 }}
         className={cn(
         "flex flex-col h-[100dvh] w-full bg-white dark:bg-[#121212] overflow-hidden relative shadow-2xl",
         fontFamily === 'inter' ? 'font-inter' : 'font-josefin',
@@ -597,15 +681,35 @@ export default function App() {
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: 'easeOut', delay: 0.04 }}
-          className="neo-topbar flex-shrink-0 flex items-center justify-between px-4 pb-3 z-40 dark:bg-[#121212]">
+          className="neo-topbar absolute top-0 left-0 right-0 flex items-center justify-between px-4 pb-3 z-[100]">
           <div className="flex items-center gap-3">
-            <motion.button 
+            <motion.button
               type="button"
-              whileTap={{ scale: 0.94 }}
-              onClick={() => setIsSidebarOpen(true)}
-              className="p-3 bg-gray-50 dark:bg-zinc-800 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
+              whileTap={{ scale: 0.92 }}
+              animate={{ scale: isSidebarOpen ? 1 : 1 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              onClick={() => setIsSidebarOpen(prev => !prev)}
+              aria-label={isSidebarOpen ? 'Close menu' : 'Open menu'}
+              aria-expanded={isSidebarOpen}
+              className="neo-hamburger-button p-3 bg-gray-50 dark:bg-zinc-800 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
             >
-              <Menu size={20} className="text-gray-700 dark:text-gray-200" />
+              <span className="neo-hamburger" aria-hidden="true">
+                <motion.span
+                  className="neo-hamburger-line"
+                  animate={isSidebarOpen ? { rotate: 45, y: 6 } : { rotate: 0, y: 0 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                />
+                <motion.span
+                  className="neo-hamburger-line"
+                  animate={isSidebarOpen ? { opacity: 0, scaleX: 0.25 } : { opacity: 1, scaleX: 1 }}
+                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                />
+                <motion.span
+                  className="neo-hamburger-line"
+                  animate={isSidebarOpen ? { rotate: -45, y: -6 } : { rotate: 0, y: 0 }}
+                  transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                />
+              </span>
             </motion.button>
             
             {/* Model Selector Capsule */}
@@ -658,22 +762,12 @@ export default function App() {
             </div>
           </div>
 
-          {activeChatId && <motion.button 
-            type="button"
-            whileTap={{ scale: 0.9 }}
-            onClick={() => { 
-              setIsIncognito(!isIncognito); 
-              showToast(isIncognito ? 'Incognito disabled' : 'Incognito enabled');
-            }}
-            className={cn(
-              "p-3 rounded-full transition-colors", 
-              isIncognito 
-                ? "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400" 
-                : "bg-gray-50 dark:bg-zinc-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700"
-            )}
-          >
-            {isIncognito ? <EyeOff size={20} /> : <Eye size={20} />}
-          </motion.button>}
+          {messages.length > 0 ? (
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="neo-conversation-actions">
+              <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={() => { setMessages([]); setActiveChatId(null); setInput(''); setPendingAttachments([]); setIsDictationOpen(false); setWelcomeMessage(getWelcomeMessage()); setMoreMenuMessageId(null); showToast('New chat started'); }} className="neo-conversation-action" aria-label="New chat"><Plus size={20}/></motion.button>
+              <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={() => showToast('Chat actions are available from the menu.')} className="neo-conversation-action" aria-label="More chat actions"><MoreVertical size={20}/></motion.button>
+            </motion.div>
+          ) : <div className="w-11 h-11" aria-hidden="true" />}
         </motion.header>
 
         {/* Main Chat Area */}
@@ -682,7 +776,7 @@ export default function App() {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.46, ease: [0.22, 1, 0.36, 1], delay: 0.09 }}
-          className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-28 pt-2 dark:bg-[#121212] neo-content-fade">
+          className="absolute inset-0 z-10 overflow-y-auto custom-scrollbar px-4 pb-36 pt-2 dark:bg-[#121212] neo-content-fade neo-chat-scroll">
           {messages.length === 0 && !isLoading && (
             <motion.div
               initial={{ opacity: 0, y: 44, scale: 0.94 }}
@@ -740,13 +834,21 @@ export default function App() {
                       )}
                       
                       {/* Action Bar for AI message */}
-                      <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 mt-1">
-                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('copy', msg.text)} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><Copy size={16} /></motion.button>
-                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('thumbsUp')} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><ThumbsUp size={16} /></motion.button>
-                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('thumbsDown')} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><ThumbsDown size={16} /></motion.button>
-                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('speaker', msg.text)} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><Speaker size={16} /></motion.button>
-                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('share', msg.text)} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><Share2 size={16} /></motion.button>
-                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('more')} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><MoreVertical size={16} /></motion.button>
+                      <div className="relative flex items-center gap-1.5 text-gray-500 dark:text-gray-400 mt-1">
+                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('copy', msg.text)} className="neo-message-action" aria-label="Copy"><Copy size={17} /></motion.button>
+                        <motion.button whileTap={{ scale: 0.8 }} animate={{ scale: feedbackByMessage[msg.id] === 'up' ? [1, 1.18, 1] : 1 }} onClick={() => handleActionClick('thumbsUp', undefined, msg.id)} className={cn('neo-message-action', feedbackByMessage[msg.id] === 'up' && 'is-selected-up')} aria-label="Like"><ThumbsUp size={17} fill={feedbackByMessage[msg.id] === 'up' ? 'currentColor' : 'none'} /></motion.button>
+                        <motion.button whileTap={{ scale: 0.8 }} animate={{ scale: feedbackByMessage[msg.id] === 'down' ? [1, 1.18, 1] : 1 }} onClick={() => handleActionClick('thumbsDown', undefined, msg.id)} className={cn('neo-message-action', feedbackByMessage[msg.id] === 'down' && 'is-selected-down')} aria-label="Dislike"><ThumbsDown size={17} fill={feedbackByMessage[msg.id] === 'down' ? 'currentColor' : 'none'} /></motion.button>
+                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('speaker', msg.text)} className="neo-message-action" aria-label="Read aloud"><Speaker size={17} /></motion.button>
+                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('share', msg.text)} className="neo-message-action" aria-label="Share"><Share2 size={17} /></motion.button>
+                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('more', undefined, msg.id)} className="neo-message-action" aria-label="More"><MoreVertical size={17} /></motion.button>
+                        <AnimatePresence>
+                          {moreMenuMessageId === msg.id && (
+                            <motion.div initial={{ opacity: 0, y: 6, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 6, scale: 0.96 }} className="neo-message-more-menu">
+                              <button type="button" onClick={() => regenerateLastResponse(msg.id)}><RefreshCw size={16}/> Regenerate</button>
+                              <button type="button" onClick={() => { setMoreMenuMessageId(null); handleActionClick('share', msg.text); }}><Share2 size={16}/> Share</button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                     </div>
                   )}
@@ -754,7 +856,7 @@ export default function App() {
               ))}
             </AnimatePresence>
             
-            {isLoading && (
+            {(isLoading || isRegenerating) && (
               <motion.div
                 initial={{ opacity: 0, y: 8, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -782,7 +884,7 @@ export default function App() {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.44, ease: [0.22, 1, 0.36, 1], delay: 0.13 }}
-          className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-[#121212] dark:via-[#121212]/95 pt-6 px-4 z-20 neo-bottom-shell">
+          className="absolute bottom-0 left-0 right-0 pt-6 px-4 z-[90] neo-bottom-shell">
           <input type="file" ref={cameraInputRef} onChange={handleFileUpload} accept="image/*" capture="environment" className="hidden" />
           <input type="file" ref={photoInputRef} onChange={handleFileUpload} accept="image/*" multiple className="hidden" />
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*,.pdf,.txt,.md,.json,.csv,.doc,.docx" multiple className="hidden" />
@@ -865,9 +967,10 @@ export default function App() {
                 isOpen={isDictationOpen}
                 inline
                 onClose={() => setIsDictationOpen(false)}
-                onTranscript={(text) => setInput(text)}
+                onTranscript={(text) => setInput(prev => prev ? `${prev} ${text}`.trim() : text)}
                 onComplete={() => {
-                  setTimeout(() => inputRef.current?.focus(), 100);
+                  setIsDictationOpen(false);
+                  setTimeout(() => inputRef.current?.focus(), 120);
                 }}
               />
             ) : <textarea
@@ -878,7 +981,7 @@ export default function App() {
               placeholder="Ask Neo Gpt"
               rows={1}
               className="flex-1 bg-transparent border-none outline-none resize-none max-h-32 py-3.5 px-2 text-gray-800 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 font-medium text-[16px] flex items-center"
-              style={{ minHeight: '52px' }}
+              style={{ minHeight: '52px', height: `${textareaHeight}px`, maxHeight: `${25 * 8 + 28}px`, transition: 'height 220ms cubic-bezier(.22,1,.36,1)' }}
             />}
 
             <div className="flex items-center gap-1 pr-1 flex-shrink-0">
@@ -982,7 +1085,7 @@ export default function App() {
         <VoiceModal 
           isOpen={isVoiceOpen} 
           onClose={() => setIsVoiceOpen(false)}
-          onTranscript={(text) => setInput(text)}
+          onTranscript={(text) => setInput(prev => prev ? `${prev} ${text}`.trim() : text)}
           onSilenceSubmit={() => {
             setTimeout(() => {
               handleSubmit();

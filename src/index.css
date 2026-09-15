@@ -60,22 +60,53 @@ button, textarea, input {
 }
 
 .neo-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  min-height: calc(env(safe-area-inset-top, 0px) + 82px);
   padding-top: calc(env(safe-area-inset-top, 0px) + 18px);
-  position: relative;
+  padding-bottom: 18px;
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.82) 0%,
+    rgba(255,255,255,0.58) 42%,
+    rgba(255,255,255,0.20) 72%,
+    rgba(255,255,255,0) 100%
+  );
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  isolation: isolate;
+  pointer-events: none;
 }
-
+.neo-topbar > * { pointer-events: auto; }
+.dark .neo-topbar {
+  background: linear-gradient(
+    to bottom,
+    rgba(18,18,18,0.84) 0%,
+    rgba(18,18,18,0.62) 42%,
+    rgba(18,18,18,0.22) 72%,
+    rgba(18,18,18,0) 100%
+  );
+}
 .neo-topbar::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  height: calc(env(safe-area-inset-top, 0px) + 18px);
+  inset: 0;
+  z-index: -1;
   pointer-events: none;
-  background: linear-gradient(to bottom, rgba(255,255,255,0.95), rgba(255,255,255,0));
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.18),
+    rgba(255,255,255,0) 78%
+  );
 }
 .dark .neo-topbar::after {
-  background: linear-gradient(to bottom, rgba(18,18,18,0.98), rgba(18,18,18,0));
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.035),
+    rgba(255,255,255,0) 78%
+  );
 }
 
 .neo-content-fade {
@@ -84,21 +115,40 @@ button, textarea, input {
 }
 
 .neo-bottom-shell {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  background: linear-gradient(
+    to top,
+    rgba(255,255,255,0.86) 0%,
+    rgba(255,255,255,0.68) 32%,
+    rgba(255,255,255,0.30) 68%,
+    rgba(255,255,255,0) 100%
+  );
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
 }
-
+.neo-bottom-shell > * { pointer-events: auto; }
+.dark .neo-bottom-shell {
+  background: linear-gradient(
+    to top,
+    rgba(18,18,18,0.88) 0%,
+    rgba(18,18,18,0.70) 32%,
+    rgba(18,18,18,0.32) 68%,
+    rgba(18,18,18,0) 100%
+  );
+}
 .neo-bottom-shell::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  height: calc(env(safe-area-inset-bottom, 0px) + 12px);
   pointer-events: none;
-  background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.72));
+  background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.62));
 }
 .dark .neo-bottom-shell::after {
-  background: linear-gradient(to bottom, rgba(18,18,18,0), rgba(18,18,18,0.72));
+  background: linear-gradient(to bottom, rgba(18,18,18,0), rgba(18,18,18,0.68));
 }
 
 @keyframes neoTapBounce {
@@ -112,6 +162,46 @@ button, textarea, input {
 .neo-topbar button:active {
   animation: neoTapBounce 260ms cubic-bezier(.2,.9,.25,1);
 }
+
+/* Premium hamburger ↔ close morph. The three strokes stay centered so the
+   transformation never changes the button footprint or shifts the header. */
+.neo-hamburger-button {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+}
+.neo-hamburger {
+  width: 20px;
+  height: 16px;
+  display: block;
+  position: relative;
+  color: rgb(55 65 81);
+}
+.dark .neo-hamburger { color: rgb(229 231 235); }
+.neo-hamburger-line {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 20px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+.neo-hamburger-line:nth-child(1) { margin-top: -7px; }
+.neo-hamburger-line:nth-child(2) { margin-top: -1px; }
+.neo-hamburger-line:nth-child(3) { margin-top: 5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-hamburger-line { transition: none !important; }
+}
+
 
 
 .neo-settings-header, .neo-sidebar-header {
@@ -310,17 +400,16 @@ button, textarea, input {
   .neo-thinking-clean .neo-thinking-label { animation: none; }
 }
 
-/* Stable mobile chrome: the top controls never move with the chat scroll or keyboard. */
-.neo-topbar {
-  position: relative;
-  z-index: 40;
-  flex-shrink: 0;
-  background: #fff;
-  isolation: isolate;
-}
-.dark .neo-topbar { background: #121212; }
+/* Stable mobile chrome: the top controls stay over the scrolling chat while the surface remains translucent. */
 .neo-topbar > * { position: relative; z-index: 2; }
 .neo-welcome-title { will-change: transform, opacity; }
+
+.neo-chat-scroll {
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 84px);
+  scroll-padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 118px);
+}
 
 /* The dictation waveform lives inside the composer; it never creates a page overlay. */
 .neo-bottom-shell form { overflow: visible; }
@@ -328,4 +417,180 @@ button, textarea, input {
 
 @media (prefers-reduced-motion: reduce) {
   .neo-welcome-title { animation: none; }
+}
+
+/* Neo Gpt premium interaction layer */
+.neo-topbar {
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  padding-top: calc(env(safe-area-inset-top, 0px) + 16px);
+}
+.neo-topbar > * { min-width: 0; }
+.neo-conversation-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(247,248,250,.82);
+  border: 1px solid rgba(148,163,184,.14);
+  box-shadow: 0 8px 26px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.85);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+.dark .neo-conversation-actions {
+  background: rgba(39,39,42,.76);
+  border-color: rgba(255,255,255,.08);
+  box-shadow: 0 10px 30px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.05);
+}
+.neo-conversation-action {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: rgb(55 65 81);
+  transition: transform .22s cubic-bezier(.22,1,.36,1), background-color .22s ease, color .22s ease;
+}
+.neo-conversation-action:hover { background: rgba(148,163,184,.12); }
+.dark .neo-conversation-action { color: rgb(229 231 235); }
+.dark .neo-conversation-action:hover { background: rgba(255,255,255,.08); }
+
+.neo-message-action {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: rgb(107 114 128);
+  transition: transform .24s cubic-bezier(.22,1,.36,1), color .22s ease, background-color .22s ease, box-shadow .22s ease;
+}
+.neo-message-action:hover { background: rgba(107,114,128,.10); color: rgb(31 41 55); }
+.dark .neo-message-action { color: rgb(156 163 175); }
+.dark .neo-message-action:hover { background: rgba(255,255,255,.08); color: white; }
+.neo-message-action.is-selected-up { color: rgb(37 99 235); background: rgba(59,130,246,.12); box-shadow: 0 0 0 4px rgba(59,130,246,.05); }
+.neo-message-action.is-selected-down { color: rgb(239 68 68); background: rgba(239,68,68,.11); box-shadow: 0 0 0 4px rgba(239,68,68,.05); }
+.dark .neo-message-action.is-selected-up { color: rgb(96 165 250); background: rgba(59,130,246,.18); }
+.dark .neo-message-action.is-selected-down { color: rgb(248 113 113); background: rgba(239,68,68,.17); }
+.neo-message-more-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 154px;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.96);
+  border: 1px solid rgba(148,163,184,.18);
+  box-shadow: 0 16px 40px rgba(15,23,42,.16);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  z-index: 70;
+}
+.dark .neo-message-more-menu { background: rgba(39,39,42,.97); border-color: rgba(255,255,255,.08); box-shadow: 0 18px 44px rgba(0,0,0,.3); }
+.neo-message-more-menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  text-align: left;
+  color: rgb(55 65 81);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color .18s ease, transform .18s ease;
+}
+.neo-message-more-menu button:hover { background: rgba(107,114,128,.10); }
+.dark .neo-message-more-menu button { color: rgb(229 231 235); }
+.dark .neo-message-more-menu button:hover { background: rgba(255,255,255,.08); }
+
+.neo-bottom-shell form {
+  min-height: 56px;
+  transition: min-height .24s cubic-bezier(.22,1,.36,1), border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+  align-items: flex-end;
+}
+.neo-bottom-shell textarea {
+  line-height: 25px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.neo-bottom-shell textarea::-webkit-scrollbar { display: none; }
+.neo-bottom-shell form:focus-within {
+  box-shadow: 0 10px 32px rgba(15,23,42,.08), 0 0 0 3px rgba(59,130,246,.08);
+}
+.dark .neo-bottom-shell form:focus-within {
+  box-shadow: 0 12px 34px rgba(0,0,0,.24), 0 0 0 3px rgba(96,165,250,.11);
+}
+
+.neo-dictation-inline {
+  overflow: hidden;
+}
+.neo-dictation-inner {
+  width: 100%;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px;
+}
+.neo-dictation-cancel,
+.neo-dictation-stop {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: rgb(107 114 128);
+  transition: transform .22s cubic-bezier(.22,1,.36,1), background-color .2s ease, color .2s ease;
+}
+.neo-dictation-cancel:hover { background: rgba(107,114,128,.10); color: rgb(31 41 55); }
+.dark .neo-dictation-cancel, .dark .neo-dictation-stop { color: rgb(209 213 219); }
+.dark .neo-dictation-cancel:hover, .dark .neo-dictation-stop:hover { background: rgba(255,255,255,.08); }
+.neo-dictation-stop { color: rgb(239 68 68); background: rgba(239,68,68,.08); }
+.neo-dictation-stop:hover { background: rgba(239,68,68,.14); }
+.neo-dictation-wave {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  overflow: hidden;
+  border-radius: 18px;
+}
+.neo-dictation-wave span {
+  width: 3px;
+  min-height: 4px;
+  max-height: 34px;
+  border-radius: 999px;
+  background: linear-gradient(to top, rgb(59 130 246), rgb(96 165 250));
+  box-shadow: 0 0 10px rgba(59,130,246,.16);
+  transform-origin: center;
+}
+.dark .neo-dictation-wave span { background: linear-gradient(to top, rgb(96 165 250), rgb(147 197 253)); }
+
+/* Keep the app chrome stable while the Android keyboard changes the visual viewport. */
+@media (max-width: 640px) {
+  .neo-topbar { isolation: isolate; }
+  .neo-topbar > * { transform: translateZ(0); }
+}
+
+.dark,
+.dark body,
+.dark #root { color-scheme: dark; }
+.dark .neo-bottom-shell form { border-color: rgba(255,255,255,.08); background: rgba(39,39,42,.88); color: rgb(243 244 246); }
+.dark .neo-bottom-shell form input,
+.dark .neo-bottom-shell form textarea { color: rgb(243 244 246); }
+.dark .neo-bottom-shell form textarea::placeholder { color: rgb(156 163 175); }
+
+@media (prefers-reduced-motion: reduce) {
+  .neo-conversation-actions,
+  .neo-message-action,
+  .neo-bottom-shell form,
+  .neo-dictation-wave span { transition: none; }
 }
