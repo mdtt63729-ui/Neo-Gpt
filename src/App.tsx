@@ -1,14 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, RefreshCw, Plus, Mic, AudioLines, Camera, Image as ImageIcon, Paperclip, Puzzle, BrainCircuit, ArrowUp, Copy, ThumbsUp, ThumbsDown, Speaker, Share2, MoreVertical, X, Download, ChevronDown, Check, Square } from 'lucide-react';
+import { Sparkles, RefreshCw, Plus, Mic, AudioLines, Camera, Image as ImageIcon, Paperclip, Puzzle, BrainCircuit, ArrowUp, Copy, ThumbsUp, ThumbsDown, Speaker, Share2, MoreVertical, X, Download, ChevronDown, Check, Square, EyeOff } from 'lucide-react';
 import { cn } from './lib/utils';
 import { callApi, testProviderConnection } from './api';
 import { Message, MessageAttachment, ApiKeys, ProviderConfig } from './types';
 import { motion, AnimatePresence } from 'motion/react';
 import { App as CapacitorApp } from '@capacitor/app';
 import { Sidebar } from './components/Sidebar';
+import { haptic } from './lib/haptics';
 import { Settings } from './components/Settings';
 import { VoiceModal } from './components/VoiceModal';
 import { DictationModal } from './components/DictationModal';
+import { AuthScreen, AuthSession, AuthUser } from './components/AuthScreen';
 
 const SYSTEM_MODELS = [
   { id: 'venus-3.1', name: 'Venus 3.1', provider: 'system', providerId: 'system', input: 'text' as const },
@@ -250,6 +252,7 @@ export default function App() {
   const [isAttachmentOpen, setIsAttachmentOpen] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<MessageAttachment[]>([]);
   const [isModelSelectOpen, setIsModelSelectOpen] = useState(false);
+  const [isIncognito, setIsIncognito] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<{ id: string; title: string; messages: Message[] }[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
@@ -269,7 +272,13 @@ export default function App() {
   const [moreMenuMessageId, setMoreMenuMessageId] = useState<string | null>(null);
   const [feedbackByMessage, setFeedbackByMessage] = useState<Record<string, 'up' | 'down' | null>>({});
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isHeaderMoreOpen, setIsHeaderMoreOpen] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(52);
+  const [authState, setAuthState] = useState<'loading' | 'authenticated' | 'guest' | 'unauthenticated'>('loading');
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authPromptFromGuest, setAuthPromptFromGuest] = useState(false);
+  const [isNearChatBottom, setIsNearChatBottom] = useState(true);
+  const lastMessageCountRef = useRef(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -277,7 +286,60 @@ export default function App() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
+  const authSessionRef = useRef<AuthSession | null>(null);
+  const handleGuest = () => {
+    localStorage.setItem('neo-gpt-guest-mode', '1');
+    authSessionRef.current = null;
+    setAuthUser(null);
+    setAuthPromptFromGuest(false);
+    setAuthState('guest');
+  };
+
+  const handleAuthenticated = (user: AuthUser, session: AuthSession) => {
+    authSessionRef.current = session;
+    localStorage.removeItem('neo-gpt-guest-mode');
+    setAuthUser(user);
+    setAuthPromptFromGuest(false);
+    setAuthState('authenticated');
+  };
+
   const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+    const anonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '');
+    const restore = async () => {
+      if (!supabaseUrl || !anonKey) { if (!cancelled) setAuthState('unauthenticated'); return; }
+      const raw = localStorage.getItem('neo-gpt-auth-session');
+      if (!raw) {
+        const skipped = localStorage.getItem('neo-gpt-guest-mode') === '1';
+        if (!cancelled) setAuthState(skipped ? 'guest' : 'unauthenticated');
+        return;
+      }
+      try {
+        let session = JSON.parse(raw) as AuthSession;
+        if (!session.access_token) throw new Error('missing token');
+        let response = await fetch(`${supabaseUrl}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: `Bearer ${session.access_token}` } });
+        if (!response.ok && session.refresh_token) {
+          const refresh = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, { method: 'POST', headers: { apikey: anonKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: session.refresh_token }) });
+          if (!refresh.ok) throw new Error('session expired');
+          const next = await refresh.json();
+          session = { access_token: next.access_token, refresh_token: next.refresh_token || session.refresh_token, expires_at: Date.now() / 1000 + Number(next.expires_in || 3600) };
+          localStorage.setItem('neo-gpt-auth-session', JSON.stringify(session));
+          response = await fetch(`${supabaseUrl}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: `Bearer ${session.access_token}` } });
+        }
+        if (!response.ok) throw new Error('invalid session');
+        const user = await response.json();
+        if (!cancelled) { authSessionRef.current = session; setAuthUser({ id: String(user.id), email: String(user.email || ''), name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0], avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture }); setAuthState('authenticated'); }
+      } catch {
+        localStorage.removeItem('neo-gpt-auth-session');
+        if (!cancelled) setAuthState('unauthenticated');
+      }
+    };
+    restore();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('neo-gpt-settings');
@@ -319,8 +381,19 @@ export default function App() {
   }, [theme, fontFamily, apiKeys, providers, selectedModel, settingsHydrated]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setLaunchReady(true), 360);
-    return () => window.clearTimeout(timer);
+    let raf1 = 0;
+    let raf2 = 0;
+    let timer = 0;
+    raf1 = window.requestAnimationFrame(() => {
+      raf2 = window.requestAnimationFrame(() => {
+        timer = window.setTimeout(() => setLaunchReady(true), 110);
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -392,18 +465,42 @@ export default function App() {
     return () => removeListener?.();
   }, [isSidebarOpen, isSettingsOpen, isAttachmentOpen, isModelSelectOpen, isVoiceOpen, isDictationOpen, expandedImage]);
 
-  const scrollToBottom = () => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTo({
-        top: chatContainerRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+    el.scrollTo({ top: Math.max(0, el.scrollHeight - el.clientHeight - 8), behavior });
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+    const el = chatContainerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setIsNearChatBottom(distance < 160);
+    };
+    onScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const previousCount = lastMessageCountRef.current;
+    lastMessageCountRef.current = messages.length;
+    if (messages.length === 0) return;
+    // Only follow newly-added content when the user is already near the bottom.
+    // Never scroll the window/document or move the fixed header/input shell.
+    if (messages.length > previousCount && (isNearChatBottom || previousCount === 0)) {
+      requestAnimationFrame(() => scrollToBottom('smooth'));
+    }
+  }, [messages.length, isNearChatBottom]);
+
+  useEffect(() => {
+    const el = chatContainerRef.current;
+    if (!el || !isLoading || !isNearChatBottom) return;
+    const observer = new ResizeObserver(() => scrollToBottom('auto'));
+    observer.observe(el.firstElementChild || el);
+    return () => observer.disconnect();
+  }, [isLoading, isNearChatBottom]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -424,24 +521,31 @@ export default function App() {
     if (!key) { showToast('Add a Gemini API key in Settings to use Gemini voice.'); return; }
     try {
       showToast('Generating Gemini voice…');
-      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent', {
+      const res = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': key,
+          'Api-Revision': '2026-05-20',
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: `Read this naturally and clearly. Keep the original wording.\n\n${text}` }] }],
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } }, languageCode: navigator.language || 'en-IN' },
-          },
+          model: 'gemini-3.1-flash-tts-preview',
+          input: `Read naturally and clearly. Keep the original wording.\n\n${text}`,
+          response_format: { type: 'audio' },
+          generation_config: { speech_config: [{ voice: 'Kore' }] },
         }),
       });
-      const data = await res.json();
-      const encoded = data?.candidates?.[0]?.content?.parts?.find((part: any) => part?.inlineData?.data)?.inlineData?.data;
+      const data = await res.json().catch(() => ({}));
+      const encoded = data?.output_audio?.data || data?.outputAudio?.data;
       if (!res.ok || !encoded) throw new Error(data?.error?.message || 'Gemini did not return audio.');
       const binary = atob(encoded);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const audioContext = new AudioContext();
+      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextCtor) throw new Error('Audio playback is not supported on this device.');
+      const audioContext = new AudioContextCtor();
+      if (audioContext.state === 'suspended') await audioContext.resume();
+      // Gemini TTS returns raw 24 kHz, 16-bit PCM for the audio output.
       const pcm = new Int16Array(bytes.buffer);
       const buffer = audioContext.createBuffer(1, pcm.length, 24000);
       const channel = buffer.getChannelData(0);
@@ -474,6 +578,7 @@ export default function App() {
     } else if (action === 'more' && messageId) {
       setMoreMenuMessageId(prev => prev === messageId ? null : messageId);
     } else if (action === 'plugin') {
+      if (authState !== 'authenticated') { requireLogin(); return; }
       setIsAttachmentOpen(false); showToast('Plugins are ready for a future provider connection.');
     } else if (action === 'think') {
       setIsAttachmentOpen(false); showToast('Thinking mode is enabled for the next request.');
@@ -509,6 +614,7 @@ export default function App() {
     e?.preventDefault();
     if ((!input.trim() && pendingAttachments.length === 0) || isLoading || isRegenerating) return;
 
+    haptic('tap');
     const userText = input.trim();
     const attachmentsToSend = [...pendingAttachments];
     setInput('');
@@ -634,9 +740,20 @@ export default function App() {
     });
   };
 
-  const triggerFileInput = () => { setIsAttachmentOpen(false); fileInputRef.current?.click(); };
-  const triggerPhotoInput = () => { setIsAttachmentOpen(false); photoInputRef.current?.click(); };
-  const triggerCameraInput = () => { setIsAttachmentOpen(false); cameraInputRef.current?.click(); };
+  const requireLogin = () => {
+    haptic('warning');
+    setIsAttachmentOpen(false);
+    setIsHeaderMoreOpen(false);
+    showToast('Please log in to use protected features.');
+    setAuthState('unauthenticated');
+  };
+  const triggerFileInput = () => { if (authState !== 'authenticated') return requireLogin(); setIsAttachmentOpen(false); fileInputRef.current?.click(); };
+  const triggerPhotoInput = () => { if (authState !== 'authenticated') return requireLogin(); setIsAttachmentOpen(false); photoInputRef.current?.click(); };
+  const triggerCameraInput = () => { if (authState !== 'authenticated') return requireLogin(); setIsAttachmentOpen(false); cameraInputRef.current?.click(); };
+
+  const openLogin = () => { haptic('tap'); setIsHeaderMoreOpen(false); setAuthPromptFromGuest(true); setAuthState('unauthenticated'); };
+  const cancelLogin = () => { setAuthPromptFromGuest(false); setAuthState('guest'); };
+
 
   const availableModels = [
     ...SYSTEM_MODELS,
@@ -664,31 +781,48 @@ export default function App() {
     return result;
   };
 
+  if (authState === 'loading') {
+    return <div className={`neo-auth-loading ${theme}`}><div className="neo-auth-loading-mark">N</div></div>;
+  }
+  if (authState === 'unauthenticated') {
+    return <AuthScreen onAuthenticated={handleAuthenticated} onSkip={handleGuest} onCancel={authPromptFromGuest ? cancelLogin : undefined} />;
+  }
+
+  const logout = async () => {
+    const url = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+    const key = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '');
+    const session = authSessionRef.current;
+    try {
+      if (url && key && session?.access_token) await fetch(`${url}/auth/v1/logout`, { method: 'POST', headers: { apikey: key, Authorization: `Bearer ${session.access_token}` } });
+    } catch { /* local logout still completes */ }
+    localStorage.removeItem('neo-gpt-auth-session');
+    localStorage.removeItem('neo-gpt-guest-mode');
+    authSessionRef.current = null; setAuthUser(null); setAuthPromptFromGuest(false); setIsSettingsOpen(false); setIsSidebarOpen(false); setAuthState('unauthenticated');
+  };
+
   return (
     <div className={theme}>
       <motion.div
-        initial={{ opacity: 0, y: 16, scale: 0.985, filter: 'blur(5px)' }}
-        animate={{ opacity: launchReady ? 1 : 0, y: launchReady ? 0 : 16, scale: launchReady ? 1 : 0.985, filter: launchReady ? 'blur(0px)' : 'blur(5px)' }}
-        transition={{ duration: 0.72, ease: [0.16, 1, 0.3, 1], delay: launchReady ? 0 : 0.06 }}
+        initial={false}
+        animate={{ opacity: launchReady ? 1 : 0 }}
+        transition={{ duration: 0.58, ease: [0.22, 1, 0.36, 1] }}
         className={cn(
-        "flex flex-col h-[100dvh] w-full bg-white dark:bg-[#121212] overflow-hidden relative shadow-2xl",
+        "grid grid-rows-[auto_minmax(0,1fr)_auto] h-[100dvh] w-full bg-white dark:bg-[#121212] overflow-hidden relative shadow-2xl neo-launch-orchestrator",
+        launchReady ? 'is-revealed' : 'is-preparing',
         fontFamily === 'inter' ? 'font-inter' : 'font-josefin',
-        // Mobile constraint wrapper
-        "max-w-[480px] mx-auto border-x border-gray-100 dark:border-zinc-800"
+        "max-w-[480px] mx-auto border-x border-gray-100 dark:border-zinc-800 neo-launch-shell"
       )}>
-        {/* Top Bar */}
+        {/* Global top chrome stays mounted on chat, settings and other app pages. */}
         <motion.header
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: 'easeOut', delay: 0.04 }}
-          className="neo-topbar absolute top-0 left-0 right-0 flex items-center justify-between px-4 pb-3 z-[100]">
+          initial={false}
+          className={cn("neo-topbar relative row-start-1 flex items-center justify-between px-4 pb-3 z-[130] neo-launch-header", isSidebarOpen && "neo-topbar-menu-open")}>
           <div className="flex items-center gap-3">
             <motion.button
               type="button"
               whileTap={{ scale: 0.92 }}
               animate={{ scale: isSidebarOpen ? 1 : 1 }}
               transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              onClick={() => setIsSidebarOpen(prev => !prev)}
+              onClick={() => { haptic('tap'); setIsSidebarOpen(prev => !prev); }}
               aria-label={isSidebarOpen ? 'Close menu' : 'Open menu'}
               aria-expanded={isSidebarOpen}
               className="neo-hamburger-button p-3 bg-gray-50 dark:bg-zinc-800 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
@@ -716,7 +850,7 @@ export default function App() {
             <div className="relative">
               <motion.button 
                 whileTap={{ scale: 0.94 }}
-                onClick={() => setIsModelSelectOpen(!isModelSelectOpen)}
+                onClick={() => { haptic('selection'); setIsModelSelectOpen(!isModelSelectOpen); }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
               >
                 <span className="font-medium text-sm truncate max-w-[120px]">{currentModelName}</span>
@@ -744,6 +878,7 @@ export default function App() {
                           whileTap={{ scale: 0.98 }}
                           key={model.id}
                           onClick={() => {
+                            haptic('selection');
                             selectModel(model.id);
                           }}
                           className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800 text-left"
@@ -762,35 +897,42 @@ export default function App() {
             </div>
           </div>
 
-          {messages.length > 0 ? (
-            <motion.div initial={{ opacity: 0, scale: 0.9, y: -4 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="neo-conversation-actions">
-              <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={() => { setMessages([]); setActiveChatId(null); setInput(''); setPendingAttachments([]); setIsDictationOpen(false); setWelcomeMessage(getWelcomeMessage()); setMoreMenuMessageId(null); showToast('New chat started'); }} className="neo-conversation-action" aria-label="New chat"><Plus size={20}/></motion.button>
-              <motion.button type="button" whileTap={{ scale: 0.9 }} onClick={() => showToast('Chat actions are available from the menu.')} className="neo-conversation-action" aria-label="More chat actions"><MoreVertical size={20}/></motion.button>
-            </motion.div>
-          ) : <div className="w-11 h-11" aria-hidden="true" />}
+          <div className="relative flex items-center gap-2 min-w-0">
+            {authState === 'guest' ? (
+              <motion.button type="button" whileTap={{ scale: 0.96 }} onClick={openLogin} className="neo-login-button" aria-label="Log in">Log in</motion.button>
+            ) : (
+              <motion.button type="button" layout whileTap={{ scale: 0.9 }} onClick={() => { haptic('tap'); setMessages([]); setActiveChatId(null); setInput(''); setPendingAttachments([]); setIsDictationOpen(false); setIsAttachmentOpen(false); setIsModelSelectOpen(false); setWelcomeMessage(getWelcomeMessage()); setIsHeaderMoreOpen(false); showToast('New chat started'); }} className="neo-conversation-action" aria-label="New chat" title="New chat"><Plus size={20}/></motion.button>
+            )}
+            <div className="relative">
+              <motion.button type="button" layout whileTap={{ scale: 0.9 }} onClick={() => { haptic('tap'); setIsHeaderMoreOpen(v => !v); }} className="neo-conversation-action" aria-label="More options" aria-expanded={isHeaderMoreOpen} title="More options"><MoreVertical size={20}/></motion.button>
+              <AnimatePresence>
+                {isHeaderMoreOpen && (
+                  <>
+                    <motion.button type="button" aria-label="Close more options" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setIsHeaderMoreOpen(false)} className="fixed inset-0 z-[140] cursor-default" />
+                    <motion.div initial={{ opacity: 0, y: -6, scale: .97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: .97 }} transition={{ duration: .18 }} className="absolute right-0 top-12 z-[150] w-48 rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+                      <button type="button" onClick={() => { setIsIncognito(v => !v); setIsHeaderMoreOpen(false); showToast(isIncognito ? 'Incognito off' : 'Incognito on'); }} className="w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium hover:bg-gray-100 dark:hover:bg-zinc-800">{isIncognito ? 'Turn off incognito' : 'Turn on incognito'}</button>
+                      {authState === 'authenticated' && <button type="button" onClick={() => { haptic('tap'); setIsSettingsOpen(true); setIsHeaderMoreOpen(false); }} className="w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium hover:bg-gray-100 dark:hover:bg-zinc-800">Settings</button>}
+                      {messages.length > 0 && <button type="button" onClick={() => { setMessages([]); setActiveChatId(null); setInput(''); setPendingAttachments([]); setIsHeaderMoreOpen(false); setWelcomeMessage(getWelcomeMessage()); showToast('Chat reset'); }} className="w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">Clear current chat</button>}
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
         </motion.header>
 
         {/* Main Chat Area */}
         <motion.main
           ref={chatContainerRef}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.46, ease: [0.22, 1, 0.36, 1], delay: 0.09 }}
-          className="absolute inset-0 z-10 overflow-y-auto custom-scrollbar px-4 pb-36 pt-2 dark:bg-[#121212] neo-content-fade neo-chat-scroll">
+          initial={false}
+          className="relative row-start-2 min-h-0 z-10 overflow-y-auto custom-scrollbar px-4 pb-8 dark:bg-[#121212] neo-content-fade neo-chat-scroll neo-launch-content">
           {messages.length === 0 && !isLoading && (
-            <motion.div
-              initial={{ opacity: 0, y: 44, scale: 0.94 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ type: 'spring', stiffness: 220, damping: 15, mass: 0.75, delay: 0.08 }}
-              className="h-full flex flex-col items-center justify-center text-center px-4"
-            >
+            <div className="h-full flex flex-col items-center justify-center text-center px-4 neo-welcome-stage">
               <motion.h1
-                initial={{ opacity: 0, y: 28 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.48, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
+                initial={false}
                 className="text-2xl font-bold text-gray-800 dark:text-gray-200 tracking-tight neo-welcome-title"
               >{welcomeMessage}</motion.h1>
-            </motion.div>
+            </div>
           )}
           
           <div className="flex flex-col gap-6">
@@ -798,8 +940,10 @@ export default function App() {
               {messages.map((msg) => (
                 <motion.div 
                   key={msg.id}
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  initial={{ opacity: 0, y: 7 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: msg.sender === 'user' ? 0.26 : 0.32, ease: [0.22, 1, 0.36, 1] }}
+                  data-message-entry="true"
                   className={cn(
                     "flex w-full",
                     msg.sender === 'user' ? 'justify-end' : 'justify-start'
@@ -858,9 +1002,9 @@ export default function App() {
             
             {(isLoading || isRegenerating) && (
               <motion.div
-                initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
+                initial={{ opacity: 0, y: 5 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                 className="flex justify-start w-full"
                 aria-live="polite"
                 aria-label="Thinking"
@@ -868,9 +1012,9 @@ export default function App() {
                 <div className="neo-thinking-clean">
                   <span className="neo-thinking-label">Thinking</span>
                   <span className="neo-thinking-dots" aria-hidden="true">
-                    <motion.i animate={{ opacity: [0.25, 1, 0.25] }} transition={{ repeat: Infinity, duration: 1.2, delay: 0 }} />
-                    <motion.i animate={{ opacity: [0.25, 1, 0.25] }} transition={{ repeat: Infinity, duration: 1.2, delay: 0.18 }} />
-                    <motion.i animate={{ opacity: [0.25, 1, 0.25] }} transition={{ repeat: Infinity, duration: 1.2, delay: 0.36 }} />
+                    <i />
+                    <i />
+                    <i />
                   </span>
                 </div>
               </motion.div>
@@ -881,10 +1025,8 @@ export default function App() {
 
         {/* Bottom Input Area */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.44, ease: [0.22, 1, 0.36, 1], delay: 0.13 }}
-          className="absolute bottom-0 left-0 right-0 pt-6 px-4 z-[90] neo-bottom-shell">
+          initial={false}
+          className="relative row-start-3 z-[90] px-4 pt-4 neo-bottom-shell neo-launch-bottom">
           <input type="file" ref={cameraInputRef} onChange={handleFileUpload} accept="image/*" capture="environment" className="hidden" />
           <input type="file" ref={photoInputRef} onChange={handleFileUpload} accept="image/*" multiple className="hidden" />
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*,.pdf,.txt,.md,.json,.csv,.doc,.docx" multiple className="hidden" />
@@ -952,11 +1094,12 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          <form onSubmit={handleSubmit} className="relative flex items-center bg-[#f4f4f5] dark:bg-zinc-800/80 rounded-[32px] px-2 py-1.5 shadow-sm border border-gray-100 dark:border-zinc-700 transition-all focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/50 focus-within:border-blue-200 dark:focus-within:border-blue-800">
+          <motion.form layout onSubmit={handleSubmit} className="relative flex items-center bg-[#f4f4f5] dark:bg-zinc-800/80 rounded-[32px] px-2 py-1.5 shadow-sm border border-gray-100 dark:border-zinc-700 transition-all focus-within:ring-2 focus-within:ring-blue-100 dark:focus-within:ring-blue-900/50 focus-within:border-blue-200 dark:focus-within:border-blue-800">
             <motion.button
+              layout
               whileTap={{ scale: 0.9 }}
               type="button"
-              onClick={() => setIsAttachmentOpen(!isAttachmentOpen)}
+              onClick={() => { haptic('tap'); if (authState !== 'authenticated') { requireLogin(); return; } setIsAttachmentOpen(v => !v); }}
               className="p-3 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 flex-shrink-0"
             >
               <Plus size={24} />
@@ -966,6 +1109,7 @@ export default function App() {
               <DictationModal
                 isOpen={isDictationOpen}
                 inline
+                geminiApiKey={apiKeys.gemini}
                 onClose={() => setIsDictationOpen(false)}
                 onTranscript={(text) => setInput(prev => prev ? `${prev} ${text}`.trim() : text)}
                 onComplete={() => {
@@ -984,11 +1128,12 @@ export default function App() {
               style={{ minHeight: '52px', height: `${textareaHeight}px`, maxHeight: `${25 * 8 + 28}px`, transition: 'height 220ms cubic-bezier(.22,1,.36,1)' }}
             />}
 
-            <div className="flex items-center gap-1 pr-1 flex-shrink-0">
-              <motion.button 
-                whileTap={{ scale: 0.9 }} 
-                type="button" 
-                onClick={() => { setIsAttachmentOpen(false); setIsModelSelectOpen(false); setIsDictationOpen(true); }}
+            <motion.div layout className="flex items-center gap-1 pr-1 flex-shrink-0">
+              <motion.button
+                layout
+                whileTap={{ scale: 0.9 }}
+                type="button"
+                onClick={() => { haptic('tap'); setIsAttachmentOpen(false); setIsModelSelectOpen(false); setIsDictationOpen(true); }}
                 className="p-3 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700"
               >
                 <Mic size={22} />
@@ -996,17 +1141,19 @@ export default function App() {
 
               {isLoading ? (
                 <motion.button
+                  layout
                   whileTap={{ scale: 0.9 }}
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   type="button"
-                  onClick={() => { setIsLoading(false); showToast('Stopped'); }}
+                  onClick={() => { haptic('warning'); setIsLoading(false); showToast('Stopped'); }}
                   className="w-10 h-10 bg-gray-900 dark:bg-white rounded-full flex items-center justify-center text-white dark:text-gray-900 shadow-sm transition-colors ml-1"
                 >
                   <Square size={16} fill="currentColor" strokeWidth={0} />
                 </motion.button>
               ) : input.trim() || pendingAttachments.length ? (
                 <motion.button
+                  layout
                   whileTap={{ scale: 0.9 }}
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
@@ -1016,17 +1163,18 @@ export default function App() {
                   <ArrowUp size={20} strokeWidth={2.5} />
                 </motion.button>
               ) : (
-                <motion.button 
-                  whileTap={{ scale: 0.9 }} 
-                  type="button" 
-                  onClick={() => setIsVoiceOpen(true)}
+                <motion.button
+                  layout
+                  whileTap={{ scale: 0.9 }}
+                  type="button"
+                  onClick={() => { haptic('tap'); setIsVoiceOpen(true); }}
                   className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white shadow-sm hover:bg-blue-600 transition-colors ml-1"
                 >
                   <AudioLines size={20} />
                 </motion.button>
               )}
-            </div>
-          </form>
+            </motion.div>
+          </motion.form>
         </motion.div>
 
         {/* Global Toast */}
@@ -1048,6 +1196,8 @@ export default function App() {
           isOpen={isSidebarOpen} 
           onClose={() => setIsSidebarOpen(false)} 
           onOpenSettings={() => setIsSettingsOpen(true)}
+          isAuthenticated={authState === 'authenticated'}
+          onLogin={openLogin}
           chatHistory={chatHistory}
           onDeleteChat={(id) => {
             setChatHistory(prev => prev.filter(chat => chat.id !== id));
@@ -1080,6 +1230,8 @@ export default function App() {
           setProviders={setProviders}
           onTestProvider={handleTestProvider}
           onSelectProviderModel={(modelId) => setSelectedModel(modelId)}
+          accountUser={authUser}
+          onLogout={logout}
         />
         
         <VoiceModal 

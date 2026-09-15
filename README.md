@@ -18,3 +18,6 @@ View your app in AI Studio: https://ai.studio/apps/90255f01-01f2-4df6-a36d-0115a
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+
+## Authentication setup
+Neo Gpt uses Supabase Auth for real email/password and Google OAuth. Configure `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_AUTH_REDIRECT_URL` in the deployment environment, and add the redirect URL to the Supabase Auth URL allow-list. Google OAuth must also be enabled in the Supabase dashboard with the Google provider credentials configured there. Without these values the app intentionally shows a configuration error rather than a fake login.
