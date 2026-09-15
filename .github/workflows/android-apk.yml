@@ -5,6 +5,15 @@ on:
     branches:
       - '**'
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: 'Android versionName (example: 1.0.25)'
+        required: false
+        default: ''
+      version_code:
+        description: 'Android versionCode (example: 25)'
+        required: false
+        default: ''
   pull_request:
     branches:
       - '**'
@@ -62,6 +71,34 @@ jobs:
 
       - name: Sync Capacitor Android project
         run: npx cap sync android
+
+      - name: Set Android version from app-version.json / workflow inputs
+        env:
+          INPUT_VERSION_NAME: ${{ github.event.inputs.version_name }}
+          INPUT_VERSION_CODE: ${{ github.event.inputs.version_code }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+
+          cfg = json.loads(Path('app-version.json').read_text(encoding='utf-8'))
+          version_name = (os.environ.get('INPUT_VERSION_NAME') or '').strip() or str(cfg.get('versionName', '')).strip()
+          version_code = (os.environ.get('INPUT_VERSION_CODE') or '').strip() or str(cfg.get('versionCode', '')).strip()
+          if not version_name or not re.fullmatch(r'\d+(?:\.\d+){0,3}', version_name):
+              raise SystemExit(f'Invalid versionName: {version_name!r}')
+          if not version_code.isdigit() or int(version_code) < 1:
+              raise SystemExit(f'Invalid versionCode: {version_code!r}')
+          version_code = str(int(version_code))
+
+          gradle = Path('android/app/build.gradle')
+          text = gradle.read_text(encoding='utf-8')
+          text2, n_name = re.subn(r'versionName\s+[^\n]+', f'versionName "{version_name}"', text, count=1)
+          text2, n_code = re.subn(r'versionCode\s+[^\n]+', f'versionCode {version_code}', text2, count=1)
+          if n_name != 1 or n_code != 1:
+              raise SystemExit('Could not locate versionName/versionCode in android/app/build.gradle')
+          gradle.write_text(text2, encoding='utf-8')
+          print(f'Android release version: {version_name} ({version_code})')
+          PY
 
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v4
@@ -124,8 +161,6 @@ jobs:
           cat > android/app/src/main/java/com/neogpt/app/MainActivity.java <<'JAVA'
           package com.neogpt.app;
 
-          import android.Manifest;
-          import android.content.pm.PackageManager;
           import android.graphics.Color;
           import android.os.Bundle;
           import android.view.View;
@@ -138,10 +173,9 @@ jobs:
             @Override
             public void onCreate(Bundle savedInstanceState) {
               super.onCreate(savedInstanceState);
-              if (android.os.Build.VERSION.SDK_INT >= 23 &&
-                  checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 4107);
-              }
+              // Do not request microphone permission while Android is still
+              // handing off the launch splash. Dictation requests permission
+              // when the microphone feature is actually used.
               enterImmersiveMode();
             }
 
@@ -203,11 +237,11 @@ jobs:
           pattern = re.compile(r'<style\s+name="AppTheme\.NoActionBarLaunch"[^>]*>.*?</style>', re.S)
           replacement = '''<style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
             <item name="android:windowBackground">@color/neo_launch_background</item>
+            <item name="android:windowSplashScreenAnimatedIcon">@drawable/neo_gpt_splash_icon</item>
             <item name="android:statusBarColor">@color/neo_launch_background</item>
             <item name="android:navigationBarColor">@color/neo_launch_background</item>
             <item name="android:windowLightStatusBar">true</item>
             <item name="android:windowLightNavigationBar">true</item>
-            <item name="android:windowSplashScreenAnimatedIcon">@drawable/neo_gpt_splash_icon</item>
           </style>'''
           text, count = pattern.subn(replacement, text, count=1)
           if count != 1:
@@ -218,12 +252,12 @@ jobs:
           <resources>
             <style name="AppTheme.NoActionBarLaunch" parent="AppTheme.NoActionBar">
               <item name="android:windowBackground">@color/neo_launch_background</item>
+              <item name="android:windowSplashScreenAnimatedIcon">@drawable/neo_gpt_splash_icon</item>
               <item name="android:statusBarColor">@color/neo_launch_background</item>
               <item name="android:navigationBarColor">@color/neo_launch_background</item>
               <item name="android:windowLightStatusBar">false</item>
               <item name="android:windowLightNavigationBar">false</item>
-              <item name="android:windowSplashScreenAnimatedIcon">@drawable/neo_gpt_splash_icon</item>
-            </style>
+              </style>
           </resources>
           ''', encoding='utf-8')
 
@@ -232,16 +266,15 @@ jobs:
           print('Launch resources: valid XML')
           PY
 
-      - name: Apply Neo Gpt icon resources
+      - name: Apply Neo Gpt premium icon and splash resources
         run: |
-          mkdir -p android/app/src/main/res/drawable android/app/src/main/res/mipmap-anydpi-v26
+          mkdir -p android/app/src/main/res/drawable android/app/src/main/res/mipmap-anydpi-v26 android/app/src/main/res/values
           cat > android/app/src/main/res/drawable/neo_gpt_icon_foreground.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-            <path android:fillColor="#FFFFFF" android:pathData="M24,47C24,33.2 35.2,22 49,22h10c13.8,0 25,11.2 25,25v12c0,13.8 -11.2,25 -25,25H47l-16,11c-2.4,1.7 -5.8,-0.2 -5.5,-3.1l1,-9.8C26.1,76.1 24,68.8 24,59z"/>
-            <path android:fillColor="#5B7CFA" android:pathData="M37,51c4.1,-6.1 10.2,-9.2 18,-9.2s13.9,3.1 18,9.2c-4.8,-2.7 -10.8,-4.1 -18,-4.1S41.8,48.3 37,51z"/>
-            <path android:fillColor="#3949AB" android:pathData="M43,59m-2.6,0a2.6,2.6 0,1 1,5.2,0a2.6,2.6 0,1 1,-5.2,0M65,59m-2.6,0a2.6,2.6 0,1 1,5.2,0a2.6,2.6 0,1 1,-5.2,0"/>
-            <path android:fillColor="#3949AB" android:pathData="M42,69 C47.2,73.2 60.8,73.2 66,69" android:strokeWidth="3.5" android:strokeLineCap="round"/>
+            <path android:fillColor="#FFFFFFFF" android:pathData="M28,74V34C28,29.9 33.2,28.1 36,31.3L72,76C74.8,79.5 80,77.2 80,72.7V34" android:strokeWidth="8" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillType="evenOdd" />
+            <path android:fillColor="#FFA7F3D0" android:pathData="M80,74V34C80,29.9 74.8,28.1 72,31.3L36,76C33.2,79.5 28,77.2 28,72.7" android:strokeWidth="3.5" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillType="evenOdd" />
+            <path android:fillColor="#FFA7F3D0" android:pathData="M84,18l1.8,5.2 5.2,1.8 -5.2,1.8L84,32l-1.8,-5.2L77,25l5.2,-1.8z"/>
           </vector>
           XML
           cp android/app/src/main/res/drawable/neo_gpt_icon_foreground.xml android/app/src/main/res/drawable/neo_gpt_splash_icon.xml
@@ -255,7 +288,7 @@ jobs:
           cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
           cat > android/app/src/main/res/values/neo_icon_colors.xml <<'XML'
           <?xml version="1.0" encoding="utf-8"?>
-          <resources><color name="neo_icon_background">#5B7CFA</color></resources>
+          <resources><color name="neo_icon_background">#111827</color></resources>
           XML
 
       - name: Verify Android project

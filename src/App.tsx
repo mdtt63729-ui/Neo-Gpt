@@ -13,6 +13,8 @@ import { DictationModal } from './components/DictationModal';
 import { AuthScreen, AuthSession, AuthUser } from './components/AuthScreen';
 import { firebaseAuth, firebaseReady } from './lib/firebase';
 import { getNativeCurrentUser, nativeSignOut } from './lib/nativeGoogleAuth';
+import { firebaseDatabase } from './lib/firebase';
+import { UpdateGate, type AppUpdate } from './components/UpdateGate';
 
 const SYSTEM_MODELS = [
   { id: 'venus-3.1', name: 'Venus 3.1', provider: 'system', providerId: 'system', input: 'text' as const },
@@ -283,6 +285,7 @@ export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authPromptFromGuest, setAuthPromptFromGuest] = useState(false);
   const [isNearChatBottom, setIsNearChatBottom] = useState(true);
+  const [availableUpdate, setAvailableUpdate] = useState<AppUpdate | null>(null);
   const lastMessageCountRef = useRef(0);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -310,9 +313,50 @@ export default function App() {
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
+  // Remote update check is deliberately independent from authentication and startup UI.
+  // Publishing appUpdates/latest in the admin panel therefore reaches the app without
+  // making Firebase/auth/splash part of the critical launch path.
+  useEffect(() => {
+    let cancelled = false;
+    let stopListening: (() => void) | undefined;
+    const dismissedKey = 'neo-gpt-dismissed-update-code';
+
+    const checkUpdate = async () => {
+      try {
+        const info = await CapacitorApp.getInfo();
+        const installedCode = Number(info.build || '1');
+        if (!firebaseReady() || cancelled) return;
+        const ref = firebaseDatabase().ref('appUpdates/latest');
+        const apply = (snapshot: any) => {
+          if (cancelled) return;
+          const raw = snapshot?.val?.();
+          if (!raw || !raw.downloadUrl) { setAvailableUpdate(null); return; }
+          const code = Number(raw.versionCode);
+          if (!Number.isFinite(code) || code <= installedCode) { setAvailableUpdate(null); return; }
+          const update: AppUpdate = { ...raw, versionCode: code, forceUpdate: raw.forceUpdate === true };
+          const dismissed = Number(localStorage.getItem(dismissedKey) || '0');
+          if (!update.forceUpdate && dismissed >= code) { setAvailableUpdate(null); return; }
+          setAvailableUpdate(update);
+        };
+        stopListening = ref.on('value', apply, () => undefined);
+      } catch {
+        // Offline/no Firebase must never block or crash the app.
+      }
+    };
+    checkUpdate();
+    return () => { cancelled = true; if (stopListening) stopListening(); };
+  }, []);
+
+  const dismissUpdate = () => {
+    if (!availableUpdate) return;
+    localStorage.setItem('neo-gpt-dismissed-update-code', String(availableUpdate.versionCode));
+    setAvailableUpdate(null);
+  };
+
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
+    let timeoutId: number | undefined;
     const restore = async () => {
       const guestMode = localStorage.getItem('neo-gpt-guest-mode') === '1';
       if (!firebaseReady()) {
@@ -365,8 +409,16 @@ export default function App() {
         if (!cancelled) setAuthState(guestMode ? 'guest' : 'unauthenticated');
       }
     };
-    restore();
-    return () => { cancelled = true; unsubscribe?.(); };
+    // Safety valve: a broken/slow native Firebase bridge must never leave the
+    // app's internal loading screen visible indefinitely.
+    timeoutId = window.setTimeout(() => {
+      if (!cancelled) {
+        const guest = localStorage.getItem('neo-gpt-guest-mode') === '1';
+        setAuthState(guest ? 'guest' : 'unauthenticated');
+      }
+    }, 5000);
+    restore().finally(() => { if (timeoutId) window.clearTimeout(timeoutId); });
+    return () => { cancelled = true; if (timeoutId) window.clearTimeout(timeoutId); unsubscribe?.(); };
   }, []);
 
   useEffect(() => {
@@ -878,6 +930,7 @@ export default function App() {
   };
 
   return (
+    <>
     <div className={theme}>
       <motion.div
         initial={false}
@@ -1400,5 +1453,7 @@ export default function App() {
 
       </motion.div>
     </div>
+    <UpdateGate update={availableUpdate} onDismiss={dismissUpdate} />
+    </>
   );
 }

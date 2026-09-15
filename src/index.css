@@ -1098,3 +1098,18 @@ button, a, [role="button"] {
   .neo-auth-screen { align-items: flex-start; padding-top: calc(env(safe-area-inset-top, 0px) + 22px); }
   .neo-auth-card { width: 100%; max-width: 430px; margin-top: auto; margin-bottom: auto; }
 }
+
+/* Remote app update gate */
+.neo-update-overlay{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:22px;background:rgba(8,10,15,.72);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px)}
+.neo-update-card{width:min(430px,100%);max-height:min(90dvh,720px);overflow:auto;border:1px solid rgba(255,255,255,.12);border-radius:28px;padding:28px 22px 20px;background:linear-gradient(180deg,rgba(31,31,34,.98),rgba(17,17,19,.98));color:#fff;box-shadow:0 28px 90px rgba(0,0,0,.48);text-align:center}
+.neo-update-icon{width:58px;height:58px;margin:0 auto 14px;border-radius:19px;display:grid;place-items:center;background:linear-gradient(135deg,#5b7cfa,#7b93ff);box-shadow:0 12px 34px rgba(91,124,250,.34)}
+.neo-update-kicker{font-size:11px;letter-spacing:.14em;font-weight:800;color:#9eb0ff;margin-bottom:8px}
+.neo-update-card h1{font-size:24px;line-height:1.2;margin:0 0 7px;font-weight:800;letter-spacing:-.025em}
+.neo-update-version{font-size:12px;color:#a1a1aa;margin-bottom:17px}
+.neo-update-description{font-size:14px;line-height:1.6;color:#d4d4d8;margin:0 0 16px;white-space:pre-wrap}
+.neo-update-notes{text-align:left;background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.08);border-radius:17px;padding:14px;font-size:13px;line-height:1.6;color:#d4d4d8;white-space:pre-wrap;margin-bottom:17px}
+.neo-update-notes-title{font-weight:800;color:#fff;margin-bottom:5px}
+.neo-update-download{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;background:linear-gradient(135deg,#5b7cfa,#7b93ff);color:#fff;box-shadow:0 12px 30px rgba(91,124,250,.28)}
+.neo-update-later{margin:10px auto 0;background:transparent;color:#a1a1aa;font-size:13px;min-height:38px}
+.neo-update-required{display:flex;justify-content:center;align-items:center;gap:5px;color:#a1a1aa;font-size:11px;margin-top:11px}
+.light .neo-update-card{background:linear-gradient(180deg,#fff,#f7f8fb);color:#111827;border-color:#e5e7eb}.light .neo-update-version,.light .neo-update-description,.light .neo-update-required{color:#64748b}.light .neo-update-notes{background:#f5f7fb;border-color:#e5e7eb;color:#475569}.light .neo-update-notes-title{color:#111827}
