@@ -3,7 +3,7 @@
 This project keeps the existing React/Vite UI unchanged and wraps it with Capacitor for Android.
 
 ## GitHub
-Push the project to GitHub. The workflow at `.github/workflows/android-apk.yml` runs on every push and builds a debug APK automatically. The APK is available in the workflow's Artifacts as `neo-gpt-debug-apk`.
+Push the project to GitHub. The workflow at `.github/workflows/android-apk.yml` runs on every push and builds a unsigned release APK automatically. The APK is available in the workflow's Artifacts as `neo-gpt-release-unsigned-apk`.
 
 ## Local build
 
@@ -13,8 +13,8 @@ npm run android:add
 npm run android:build
 ```
 
-The debug APK is generated at:
+The unsigned release APK is generated at:
 
-`android/app/build/outputs/apk/debug/app-debug.apk`
+`android/app/build/outputs/apk/debug/app-release-unsigned.apk`
 
 The APK is a debug-signed APK suitable for testing. A Play Store release should use a proper release signing key and AAB.
