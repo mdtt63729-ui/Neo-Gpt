@@ -28,7 +28,7 @@
     "tailwind-merge": "^3.7.0",
     "@capacitor/core": "^7.4.3",
     "@capacitor/android": "^7.4.3",
-    "@capacitor/app": "^7.4.3"
+    "@capacitor/app": "^7.1.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
