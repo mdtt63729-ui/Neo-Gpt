@@ -950,3 +950,45 @@ button, textarea, input {
   font-weight: 650;
 }
 .dark .neo-auth-skip { border-color:#3f3f46; color:#d4d4d8; }
+
+/* Native-app style long-press actions for the user's own messages. */
+.neo-message-longpress-menu {
+  position: absolute;
+  right: 10px;
+  top: calc(100% + 8px);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 132px;
+  padding: 5px;
+  border-radius: 17px;
+  background: rgba(255,255,255,.97);
+  border: 1px solid rgba(148,163,184,.2);
+  box-shadow: 0 14px 38px rgba(15,23,42,.2);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.neo-message-longpress-menu button {
+  min-height: 38px;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border-radius: 12px;
+  color: rgb(31 41 55);
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background-color .16s ease, transform .16s ease;
+}
+.neo-message-longpress-menu button:active { transform: scale(.96); background: rgba(59,130,246,.1); }
+.dark .neo-message-longpress-menu {
+  background: rgba(39,39,42,.98);
+  border-color: rgba(255,255,255,.09);
+  box-shadow: 0 16px 42px rgba(0,0,0,.38);
+}
+.dark .neo-message-longpress-menu button { color: rgb(244 244 245); }
+.dark .neo-message-longpress-menu button:active { background: rgba(59,130,246,.18); }

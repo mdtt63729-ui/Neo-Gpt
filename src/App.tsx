@@ -270,6 +270,9 @@ export default function App() {
   const [welcomeMessage, setWelcomeMessage] = useState<string>(() => getWelcomeMessage());
   const [launchReady, setLaunchReady] = useState(false);
   const [moreMenuMessageId, setMoreMenuMessageId] = useState<string | null>(null);
+  const [longPressMessageId, setLongPressMessageId] = useState<string | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
+  const longPressTriggeredRef = useRef(false);
   const [feedbackByMessage, setFeedbackByMessage] = useState<Record<string, 'up' | 'down' | null>>({});
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isHeaderMoreOpen, setIsHeaderMoreOpen] = useState(false);
@@ -408,9 +411,13 @@ export default function App() {
   }, [input]);
 
   useEffect(() => {
-    const handlePointer = () => setMoreMenuMessageId(null);
+    const handlePointer = () => { setMoreMenuMessageId(null); setLongPressMessageId(null); clearLongPressTimer(); };
     window.addEventListener('neo-gpt-close-more', handlePointer);
-    return () => window.removeEventListener('neo-gpt-close-more', handlePointer);
+    window.addEventListener('pointerdown', handlePointer);
+    return () => {
+      window.removeEventListener('neo-gpt-close-more', handlePointer);
+      window.removeEventListener('pointerdown', handlePointer);
+    };
   }, []);
 
   useEffect(() => {
@@ -558,6 +565,55 @@ export default function App() {
     } catch (error) {
       showToast(error instanceof Error ? error.message : 'Gemini voice playback failed.');
     }
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current !== null) {
+      window.clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const startMessageLongPress = (messageId: string, sender: Message['sender']) => {
+    if (sender !== 'user') return;
+    clearLongPressTimer();
+    longPressTriggeredRef.current = false;
+    longPressTimerRef.current = window.setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      haptic('selection');
+      setLongPressMessageId(messageId);
+      setMoreMenuMessageId(null);
+    }, 650);
+  };
+
+  const finishMessageLongPress = () => {
+    clearLongPressTimer();
+  };
+
+  const copyUserMessage = async (message: Message) => {
+    try {
+      if (message.text) await navigator.clipboard.writeText(message.text);
+      else showToast('There is no text to copy.');
+      if (message.text) showToast('Message copied');
+    } catch {
+      showToast('Could not copy message');
+    }
+    setLongPressMessageId(null);
+  };
+
+  const editUserMessage = (messageId: string) => {
+    const index = messages.findIndex(message => message.id === messageId);
+    if (index < 0) return;
+    const message = messages[index];
+    setInput(message.text || '');
+    setPendingAttachments(message.attachments || []);
+    // Editing starts a new response from this point; preserve everything before the edited message.
+    setMessages(prev => prev.slice(0, index));
+    setActiveChatId(prev => prev);
+    setLongPressMessageId(null);
+    setTimeout(() => inputRef.current?.focus(), 120);
+    haptic('tap');
+    showToast('Edit message');
   };
 
   const handleActionClick = (action: string, text?: string, messageId?: string) => {
@@ -950,7 +1006,20 @@ export default function App() {
                   )}
                 >
                   {msg.sender === 'user' ? (
-                    <div className="bg-blue-100 dark:bg-blue-900/50 text-gray-900 dark:text-white px-3.5 py-3.5 rounded-[24px] rounded-tr-[8px] max-w-[88%] break-words shadow-sm text-[15px] leading-relaxed">
+                    <div
+                      className="relative bg-blue-100 dark:bg-blue-900/50 text-gray-900 dark:text-white px-3.5 py-3.5 rounded-[24px] rounded-tr-[8px] max-w-[88%] break-words shadow-sm text-[15px] leading-relaxed select-text"
+                      onPointerDown={() => startMessageLongPress(msg.id, msg.sender)}
+                      onPointerUp={finishMessageLongPress}
+                      onPointerCancel={finishMessageLongPress}
+                      onPointerLeave={finishMessageLongPress}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        clearLongPressTimer();
+                        longPressTriggeredRef.current = true;
+                        haptic('selection');
+                        setLongPressMessageId(msg.id);
+                      }}
+                    >
                       {msg.attachments?.length ? (
                         <div className="flex flex-wrap gap-2 mb-2">
                           {msg.attachments.map((file, index) => file.dataUrl ? (
@@ -961,6 +1030,25 @@ export default function App() {
                         </div>
                       ) : null}
                       {msg.text ? <div>{msg.text}</div> : null}
+                      <AnimatePresence>
+                        {longPressMessageId === msg.id && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 8, scale: .96 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 8, scale: .96 }}
+                            transition={{ duration: .16, ease: [0.22, 1, 0.36, 1] }}
+                            className="neo-message-longpress-menu"
+                            onPointerDown={(event) => event.stopPropagation()}
+                          >
+                            <button type="button" onClick={() => { haptic('tap'); editUserMessage(msg.id); }}>
+                              <span>Edit</span>
+                            </button>
+                            <button type="button" onClick={() => { haptic('tap'); void copyUserMessage(msg); }}>
+                              <Copy size={16} /><span>Copy</span>
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   ) : (
                     <div className="flex flex-col gap-3 w-full max-w-full">
