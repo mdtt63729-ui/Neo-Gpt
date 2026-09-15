@@ -11,9 +11,10 @@ import { Settings } from './components/Settings';
 import { VoiceModal } from './components/VoiceModal';
 import { DictationModal } from './components/DictationModal';
 import { AuthScreen, AuthSession, AuthUser } from './components/AuthScreen';
-import { firebaseAuth, firebaseReady } from './lib/firebase';
-import { getNativeCurrentUser, nativeSignOut } from './lib/nativeGoogleAuth';
+import { configureFirebasePersistence, firebaseAuth, firebaseReady } from './lib/firebase';
 import { firebaseDatabase } from './lib/firebase';
+import { onValue, ref } from 'firebase/database';
+import { onAuthStateChanged } from 'firebase/auth';
 import { UpdateGate, type AppUpdate } from './components/UpdateGate';
 
 const SYSTEM_MODELS = [
@@ -272,7 +273,6 @@ export default function App() {
   
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [welcomeMessage, setWelcomeMessage] = useState<string>(() => getWelcomeMessage());
-  const [launchReady, setLaunchReady] = useState(false);
   const [moreMenuMessageId, setMoreMenuMessageId] = useState<string | null>(null);
   const [longPressMessageId, setLongPressMessageId] = useState<string | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
@@ -326,7 +326,7 @@ export default function App() {
         const info = await CapacitorApp.getInfo();
         const installedCode = Number(info.build || '1');
         if (!firebaseReady() || cancelled) return;
-        const ref = firebaseDatabase().ref('appUpdates/latest');
+        const updateRef = ref(firebaseDatabase(), 'appUpdates/latest');
         const apply = (snapshot: any) => {
           if (cancelled) return;
           const raw = snapshot?.val?.();
@@ -338,7 +338,7 @@ export default function App() {
           if (!update.forceUpdate && dismissed >= code) { setAvailableUpdate(null); return; }
           setAvailableUpdate(update);
         };
-        stopListening = ref.on('value', apply, () => undefined);
+        stopListening = onValue(updateRef, apply, () => undefined);
       } catch {
         // Offline/no Firebase must never block or crash the app.
       }
@@ -356,70 +356,59 @@ export default function App() {
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
-    let timeoutId: number | undefined;
+
     const restore = async () => {
       const guestMode = localStorage.getItem('neo-gpt-guest-mode') === '1';
       if (!firebaseReady()) {
-        if (!guestMode && !cancelled) setAuthState('unauthenticated');
-        else if (!cancelled) setAuthState('guest');
+        if (!cancelled) setAuthState(guestMode ? 'guest' : 'unauthenticated');
         return;
       }
-      try {
-        // Native Google authentication is restored first on Android/iOS.
-        const nativeUser = await getNativeCurrentUser();
-        if (nativeUser) {
-          if (cancelled) return;
-          try {
-            const plugin = await import('@capacitor-firebase/authentication');
-            const tokenResult = await plugin.FirebaseAuthentication.getIdToken({ forceRefresh: false });
-            const token = tokenResult?.token || '';
-            const session: AuthSession = { access_token: token, refresh_token: '', expires_at: Date.now() / 1000 + 3600 };
-            localStorage.setItem('neo-gpt-auth-session', JSON.stringify(session));
-            authSessionRef.current = session;
-            setAuthUser({ id: String(nativeUser.uid || ''), email: String(nativeUser.email || ''), name: nativeUser.displayName || nativeUser.email?.split('@')[0], avatarUrl: nativeUser.photoUrl || nativeUser.photoURL || undefined });
-            localStorage.removeItem('neo-gpt-guest-mode');
-            setAuthState('authenticated');
-            return;
-          } catch {
-            // Fall through to the web Firebase session if native token retrieval fails.
-          }
-        }
 
-        const auth = firebaseAuth();
-        unsubscribe = auth.onAuthStateChanged(async (user: any) => {
+      try {
+        // Firebase Auth is the source of truth. LOCAL persistence restores the
+        // existing account across app closes, force-stops and device restarts.
+        const auth = await configureFirebasePersistence();
+        unsubscribe = onAuthStateChanged(auth, async (user: any) => {
           if (cancelled) return;
           if (!user) {
-            const skipped = localStorage.getItem('neo-gpt-guest-mode') === '1';
-            setAuthState(skipped ? 'guest' : 'unauthenticated');
+            const isGuest = localStorage.getItem('neo-gpt-guest-mode') === '1';
+            if (!cancelled) setAuthState(isGuest ? 'guest' : 'unauthenticated');
             return;
           }
+
+          const restoredUser: AuthUser = { id: String(user.uid), email: String(user.email || ''), name: user.displayName || user.email?.split('@')[0], avatarUrl: user.photoURL || undefined };
+          setAuthUser(restoredUser);
+          localStorage.removeItem('neo-gpt-guest-mode');
+          setAuthState('authenticated');
           try {
-            const token = await user.getIdToken();
+            const token = await user.getIdToken(true);
+            if (cancelled) return;
             const session: AuthSession = { access_token: token, refresh_token: '', expires_at: Date.now() / 1000 + 3600 };
             localStorage.setItem('neo-gpt-auth-session', JSON.stringify(session));
             authSessionRef.current = session;
-            setAuthUser({ id: String(user.uid), email: String(user.email || ''), name: user.displayName || user.email?.split('@')[0], avatarUrl: user.photoURL || undefined });
-            localStorage.removeItem('neo-gpt-guest-mode');
-            setAuthState('authenticated');
           } catch {
-            setAuthState('unauthenticated');
+            // Firebase remains the source of truth. A temporary offline token
+            // refresh must never force a valid restored account to Login.
           }
         });
+
+        // No timer can convert an unknown Firebase state into logged-out.
+        // The first onAuthStateChanged callback is the persistence completion signal.
       } catch {
-        if (!cancelled) setAuthState(guestMode ? 'guest' : 'unauthenticated');
+        if (!cancelled) {
+          const isGuest = localStorage.getItem('neo-gpt-guest-mode') === '1';
+          setAuthState(isGuest ? 'guest' : 'unauthenticated');
+        }
       }
     };
-    // Safety valve: a broken/slow native Firebase bridge must never leave the
-    // app's internal loading screen visible indefinitely.
-    timeoutId = window.setTimeout(() => {
-      if (!cancelled) {
-        const guest = localStorage.getItem('neo-gpt-guest-mode') === '1';
-        setAuthState(guest ? 'guest' : 'unauthenticated');
-      }
-    }, 5000);
-    restore().finally(() => { if (timeoutId) window.clearTimeout(timeoutId); });
-    return () => { cancelled = true; if (timeoutId) window.clearTimeout(timeoutId); unsubscribe?.(); };
+
+    restore();
+    return () => { cancelled = true; unsubscribe?.(); };
   }, []);
+
+  useEffect(() => {
+    if (authState !== 'loading') window.dispatchEvent(new Event('neo-gpt-auth-ready'));
+  }, [authState]);
 
   useEffect(() => {
     const saved = localStorage.getItem('neo-gpt-settings');
@@ -459,22 +448,6 @@ export default function App() {
     if (!settingsHydrated) return;
     localStorage.setItem('neo-gpt-settings', JSON.stringify({ theme, fontFamily, apiKeys, providers, selectedModel }));
   }, [theme, fontFamily, apiKeys, providers, selectedModel, settingsHydrated]);
-
-  useEffect(() => {
-    let raf1 = 0;
-    let raf2 = 0;
-    let timer = 0;
-    raf1 = window.requestAnimationFrame(() => {
-      raf2 = window.requestAnimationFrame(() => {
-        timer = window.setTimeout(() => setLaunchReady(true), 110);
-      });
-    });
-    return () => {
-      window.cancelAnimationFrame(raf1);
-      window.cancelAnimationFrame(raf2);
-      window.clearTimeout(timer);
-    };
-  }, []);
 
   useEffect(() => {
     if (!inputRef.current) return;
@@ -837,13 +810,18 @@ export default function App() {
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    const fileList = e.target.files;
     e.target.value = '';
-    if (!files.length) return;
+    if (!fileList || fileList.length === 0) return;
 
+    const files: File[] = [];
+    for (let i = 0; i < fileList.length; i += 1) {
+      const file = fileList.item(i);
+      if (file) files.push(file);
+    }
     let remaining = files.length;
     const next: MessageAttachment[] = [];
-    files.forEach(file => {
+    files.forEach((file: File) => {
       const base: MessageAttachment = { name: file.name, type: file.type || 'application/octet-stream', size: file.size };
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
@@ -914,16 +892,13 @@ export default function App() {
     return result;
   };
 
-  if (authState === 'loading') {
-    return <div className={`neo-auth-loading ${theme}`}><div className="neo-auth-loading-mark">N</div></div>;
-  }
+  if (authState === 'loading') return null;
   if (authState === 'unauthenticated') {
     return <AuthScreen onAuthenticated={handleAuthenticated} onSkip={handleGuest} onCancel={authPromptFromGuest ? cancelLogin : undefined} />;
   }
 
   const logout = async () => {
     try { if (firebaseReady()) await firebaseAuth().signOut(); } catch { /* local logout still completes */ }
-    await nativeSignOut();
     localStorage.removeItem('neo-gpt-auth-session');
     localStorage.removeItem('neo-gpt-guest-mode');
     authSessionRef.current = null; setAuthUser(null); setAuthPromptFromGuest(false); setIsSettingsOpen(false); setIsSidebarOpen(false); setAuthState('unauthenticated');
@@ -932,15 +907,9 @@ export default function App() {
   return (
     <>
     <div className={theme}>
-      <motion.div
-        initial={false}
-        animate={{ opacity: launchReady ? 1 : 0 }}
-        transition={{ duration: 0.58, ease: [0.22, 1, 0.36, 1] }}
-        className={cn(
-        "grid grid-rows-[auto_minmax(0,1fr)_auto] h-[100dvh] w-full bg-white dark:bg-[#121212] overflow-hidden relative shadow-2xl neo-launch-orchestrator",
-        launchReady ? 'is-revealed' : 'is-preparing',
-        fontFamily === 'inter' ? 'font-inter' : 'font-josefin',
-        "max-w-[480px] mx-auto border-x border-gray-100 dark:border-zinc-800 neo-launch-shell"
+      <div className={cn(
+        "grid grid-rows-[auto_minmax(0,1fr)_auto] h-[100dvh] w-full bg-white dark:bg-[#121212] overflow-hidden relative shadow-2xl neo-launch-shell",
+        fontFamily === 'inter' ? 'font-inter' : 'font-josefin'
       )}>
         {/* Global top chrome stays mounted on chat, settings and other app pages. */}
         <motion.header
@@ -1451,7 +1420,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-      </motion.div>
+      </div>
     </div>
     <UpdateGate update={availableUpdate} onDismiss={dismissUpdate} />
     </>

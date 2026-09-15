@@ -20,4 +20,6 @@ View your app in AI Studio: https://ai.studio/apps/90255f01-01f2-4df6-a36d-0115a
    `npm run dev`
 
 ## Authentication setup
-Neo Gpt uses Supabase Auth for real email/password and Google OAuth. Configure `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_AUTH_REDIRECT_URL` in the deployment environment, and add the redirect URL to the Supabase Auth URL allow-list. Google OAuth must also be enabled in the Supabase dashboard with the Google provider credentials configured there. Without these values the app intentionally shows a configuration error rather than a fake login.
+Neo Gpt uses Firebase Authentication for email/password sign-in, account creation, password reset, and persistent local auth restoration. The Firebase web configuration is bundled in `src/lib/firebase.ts`. Firebase LOCAL persistence is configured before email/password sign-in and again during app startup; Firebase's `onAuthStateChanged` callback is the source of truth for restoring an existing account.
+
+Google sign-in is intentionally not exposed in the login UI. Guest mode remains available.

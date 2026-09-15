@@ -37,7 +37,7 @@ export function Sidebar({ isOpen, onClose, onOpenSettings, onNewChat, chatHistor
             initial={{ x: '-104%' }}
             animate={{ x: 0 }}
             exit={{ x: '-104%' }}
-            transition={{ type: 'spring', stiffness: 430, damping: 38, mass: 0.72 }}
+            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
             className="absolute inset-y-0 left-0 w-[min(82%,320px)] bg-white dark:bg-[#121212] z-[120] flex flex-col shadow-xl will-change-transform"
             onPointerDown={(event) => event.stopPropagation()}
           >

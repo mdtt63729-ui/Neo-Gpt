@@ -18,13 +18,15 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-// Never let the native Android launch screen wait for Firebase/native auth.
-// Hide it as soon as the first WebView frame has been scheduled; the React
-// loading/auth UI then takes over without leaving the native splash stuck.
+// The native splash hands off as soon as Firebase has produced the first
+// definitive auth state. This prevents a white/N placeholder frame while still
+// keeping auth restoration out of the visible React UI.
 if (typeof window !== 'undefined') {
+  let hidden = false;
   const hideNativeSplash = () => {
-    SplashScreen.hide({ fadeOutDuration: 220 }).catch(() => undefined);
+    if (hidden) return;
+    hidden = true;
+    SplashScreen.hide({ fadeOutDuration: 160 }).catch(() => undefined);
   };
-  requestAnimationFrame(() => requestAnimationFrame(hideNativeSplash));
-  window.setTimeout(hideNativeSplash, 1800);
+  window.addEventListener('neo-gpt-auth-ready', hideNativeSplash, { once: true });
 }

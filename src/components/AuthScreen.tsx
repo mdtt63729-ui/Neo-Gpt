@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useMemo, useState } from 'react';
 import { ArrowRight, CheckCircle2, Eye, EyeOff, LockKeyhole, Mail, UserRound } from 'lucide-react';
-import { firebaseAuth, firebaseReady } from '../lib/firebase';
-import { nativeGoogleAvailable, signInWithNativeGoogle } from '../lib/nativeGoogleAuth';
+import { configureFirebasePersistence, firebaseReady } from '../lib/firebase';
+import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 
 export interface AuthUser {
   id: string;
@@ -40,28 +39,6 @@ export function AuthScreen({ onAuthenticated, onSkip, onCancel }: AuthScreenProp
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [showPremiumIntro, setShowPremiumIntro] = useState(() => localStorage.getItem('neo-gpt-auth-intro-seen') !== '1');
-
-  useEffect(() => {
-    if (showPremiumIntro) {
-      const timer = window.setTimeout(() => {
-        localStorage.setItem('neo-gpt-auth-intro-seen', '1');
-        setShowPremiumIntro(false);
-      }, 1050);
-      return () => window.clearTimeout(timer);
-    }
-  }, [showPremiumIntro]);
-
-  useEffect(() => {
-    if (!firebaseReady()) { setError('Firebase could not be loaded. Check your internet connection and try again.'); return; }
-    const auth = firebaseAuth();
-    auth.getRedirectResult().then(async result => {
-      if (!result?.user) return;
-      const session = await makeSession(result.user);
-      localStorage.setItem('neo-gpt-auth-session', JSON.stringify(session));
-      onAuthenticated(userFromFirebase(result.user), session);
-    }).catch((err: any) => setError(firebaseMessage(err)));
-  }, []);
 
   const title = useMemo(() => mode === 'signup' ? 'Create your Neo Gpt account' : mode === 'forgot' ? 'Reset your password' : 'Welcome to Neo Gpt', [mode]);
   const subtitle = useMemo(() => mode === 'signup' ? 'Create a secure Firebase account to keep your chats and preferences with you.' : mode === 'forgot' ? 'Enter your email and we will send a password reset link.' : 'Sign in to continue to your personal AI workspace.', [mode]);
@@ -74,14 +51,14 @@ export function AuthScreen({ onAuthenticated, onSkip, onCancel }: AuthScreenProp
     if (mode === 'signup' && password !== confirm) { setError('Passwords do not match.'); return; }
     setBusy(true);
     try {
-      const auth = firebaseAuth();
+      const auth = await configureFirebasePersistence();
       if (mode === 'forgot') {
-        await auth.sendPasswordResetEmail(email.trim());
+        await sendPasswordResetEmail(auth, email.trim());
         setNotice('Password reset instructions have been sent to your email.');
       } else {
         const result = mode === 'signup'
-          ? await auth.createUserWithEmailAndPassword(email.trim(), password)
-          : await auth.signInWithEmailAndPassword(email.trim(), password);
+          ? await createUserWithEmailAndPassword(auth, email.trim(), password)
+          : await signInWithEmailAndPassword(auth, email.trim(), password);
         const user = result.user;
         if (!user) throw new Error('Firebase did not return a user.');
         const session = await makeSession(user);
@@ -92,63 +69,17 @@ export function AuthScreen({ onAuthenticated, onSkip, onCancel }: AuthScreenProp
     finally { setBusy(false); }
   };
 
-  const google = async () => {
-    setError(''); setNotice('');
-    setBusy(true);
-    try {
-      // Android/iOS: use the native Firebase Google flow. On Android this uses
-      // Credential Manager / Google Play Services, so the account picker is
-      // presented by the OS instead of inside the WebView.
-      if (nativeGoogleAvailable()) {
-        const result = await signInWithNativeGoogle();
-        const user = result.user;
-        const token = result.token || '';
-        const session: AuthSession = { access_token: token, refresh_token: '', expires_at: Date.now() / 1000 + 3600 };
-        localStorage.setItem('neo-gpt-auth-session', JSON.stringify(session));
-        onAuthenticated(userFromFirebase(user), session);
-        return;
-      }
-
-      if (!firebaseReady()) { throw new Error('Firebase is not available. Please reload the app.'); }
-      const auth = firebaseAuth();
-      const provider = new window.firebase.auth.GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
-      await auth.signInWithRedirect(provider);
-    } catch (err: any) { setError(firebaseMessage(err)); }
-    finally { setBusy(false); }
-  };
-
   return (
     <main className="neo-auth-screen">
-      <AnimatePresence>
-        {showPremiumIntro && (
-          <motion.div
-            className="neo-auth-premium-intro"
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <motion.div
-              className="neo-auth-premium-logo"
-              initial={{ opacity: 0, scale: 0.72, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
-            >N</motion.div>
-            <motion.div
-              className="neo-auth-premium-name"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.18, duration: 0.48, ease: [0.22, 1, 0.36, 1] }}
-            >Neo Gpt</motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: showPremiumIntro ? 0 : 1, y: showPremiumIntro ? 16 : 0 }} transition={{ delay: showPremiumIntro ? 0 : 0.05, duration: 0.55, ease: [0.22, 1, 0.36, 1] }} className="neo-auth-card">
-        <div className="neo-auth-brand"><div className="neo-auth-logo" aria-hidden="true">N</div><div><div className="neo-auth-brand-name">Neo Gpt</div><div className="neo-auth-brand-sub">Your AI workspace</div></div></div>
+      <section className="neo-auth-card" aria-label="Neo Gpt authentication">
+        <div className="neo-auth-brand">
+          <img className="neo-auth-logo" src="/neo-gpt-icon.svg" alt="Neo Gpt" />
+          <div>
+            <div className="neo-auth-brand-name">Neo Gpt</div>
+            <div className="neo-auth-brand-sub">Your AI workspace</div>
+          </div>
+        </div>
         <div className="neo-auth-heading"><h1>{title}</h1><p>{subtitle}</p></div>
-        <button type="button" disabled={busy} onClick={google} className="neo-auth-google"><span className="neo-google-mark">G</span><span>Continue with Google</span></button>
-        <div className="neo-auth-divider"><span>or continue with email</span></div>
         <form onSubmit={submit} className="neo-auth-form">
           <label className="neo-auth-field"><Mail size={18}/><input value={email} onChange={e => setEmail(e.target.value)} type="email" autoComplete="email" inputMode="email" placeholder="Email address" disabled={busy}/></label>
           {mode !== 'forgot' && <label className="neo-auth-field"><LockKeyhole size={18}/><input value={password} onChange={e => setPassword(e.target.value)} type={showPassword ? 'text' : 'password'} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} placeholder="Password" disabled={busy}/><button type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'}>{showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}</button></label>}
@@ -165,9 +96,10 @@ export function AuthScreen({ onAuthenticated, onSkip, onCancel }: AuthScreenProp
           {mode === 'forgot' && <button type="button" onClick={() => setMode('login')}>Back to sign in</button>}
         </div>
         <p className="neo-auth-terms">Authentication is secured by Firebase.</p>
-      </motion.div>
+      </section>
     </main>
   );
+
 }
 
 interface AuthScreenProps {
@@ -187,7 +119,6 @@ function firebaseMessage(err: any) {
     'auth/weak-password': 'Password must be at least 6 characters.',
     'auth/invalid-email': 'Enter a valid email address.',
     'auth/too-many-requests': 'Too many attempts. Please wait and try again.',
-    'auth/popup-blocked': 'Google sign-in was blocked. Please allow the sign-in window and try again.',
     'auth/operation-not-allowed': 'This sign-in method is not enabled in Firebase Authentication.',
   };
   return messages[code] || String(err?.message || 'Could not complete authentication.');

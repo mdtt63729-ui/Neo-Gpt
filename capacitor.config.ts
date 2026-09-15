@@ -3,17 +3,13 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   plugins: {
     SplashScreen: {
-      launchAutoHide: true,
-      launchShowDuration: 700,
-      launchFadeOutDuration: 250,
+      launchAutoHide: false,
+      launchShowDuration: 0,
+      launchFadeOutDuration: 160,
       backgroundColor: '#121212',
       splashFullScreen: true,
       splashImmersive: true,
       showSpinner: false,
-    },
-    FirebaseAuthentication: {
-      providers: ['google.com'],
-      skipNativeAuth: false,
     },
   },
   appId: 'com.neogpt.app',
