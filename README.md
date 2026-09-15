@@ -1,26 +1,20 @@
-# Neo Gpt
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+</div>
 
-Production-oriented Android-only Neo Gpt chat application.
+# Run and deploy your AI Studio app
 
-## Build
+This contains everything you need to run your app locally.
 
-```bash
-./gradlew assembleDebug --no-daemon --stacktrace
-```
+View your app in AI Studio: https://ai.studio/apps/90255f01-01f2-4df6-a36d-0115a99c2f59
 
-The GitHub Actions workflow at `.github/workflows/build-apk.yml` runs on every push and uploads `Neo-Gpt-debug-apk`.
+## Run Locally
 
-## Runtime configuration
+**Prerequisites:**  Node.js
 
-- Venus 3.1 is available by default through the existing Pico/HTML response path.
-- OpenRouter, NVIDIA NIM, and Gemini become available after their API key is configured in Settings.
-- API keys are encrypted with the Android Keystore before being stored locally.
-- Theme and font selections persist with DataStore.
 
-## Attachments
-
-The composer supports Android Photo Picker, camera capture through FileProvider, and the Android document picker. Image-capable providers receive resized image data; unsupported generic file types produce an actionable error.
-
-## App icon
-
-The launcher icon uses the supplied Neo Gpt icon artwork from the project upgrade request.
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

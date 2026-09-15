@@ -1,0 +1,109 @@
+import React from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Search, RefreshCw, Image as ImageIcon, Library, Folder, Clock, Puzzle, MessageSquare, Edit2, Settings as SettingsIcon } from 'lucide-react';
+import { cn } from '../lib/utils';
+
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onOpenSettings: () => void;
+}
+
+export function Sidebar({ isOpen, onClose, onOpenSettings }: SidebarProps) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-black/20 z-40 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ x: '-100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '-100%' }}
+            transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+            className="absolute inset-y-0 left-0 w-[80%] max-w-[320px] bg-white dark:bg-[#121212] z-50 flex flex-col shadow-xl"
+          >
+            <div className="flex items-center justify-between p-4 px-6 pt-12">
+              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white tracking-tight">Neo Gpt</h2>
+              <div className="flex gap-4">
+                <motion.button whileTap={{ scale: 0.9 }} className="p-2 bg-gray-100 dark:bg-zinc-800 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors">
+                  <Search size={20} className="text-gray-700 dark:text-gray-200" />
+                </motion.button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 py-2">
+              <nav className="space-y-1 mb-8">
+                <motion.button whileTap={{ scale: 0.98 }} className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-[20px] text-gray-700 dark:text-gray-200 font-medium transition-colors">
+                  <ImageIcon size={22} className="text-gray-900 dark:text-white" />
+                  Images
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.98 }} className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-[20px] text-gray-700 dark:text-gray-200 font-medium transition-colors">
+                  <Library size={22} className="text-gray-900 dark:text-white" />
+                  Library
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.98 }} className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-[20px] text-gray-700 dark:text-gray-200 font-medium transition-colors">
+                  <Folder size={22} className="text-gray-900 dark:text-white" />
+                  Projects
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.98 }} className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-[20px] text-gray-700 dark:text-gray-200 font-medium transition-colors">
+                  <Clock size={22} className="text-gray-900 dark:text-white" />
+                  Scheduled
+                </motion.button>
+                <motion.button whileTap={{ scale: 0.98 }} className="w-full flex items-center gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800 rounded-[20px] text-gray-700 dark:text-gray-200 font-medium transition-colors">
+                  <Puzzle size={22} className="text-gray-900 dark:text-white" />
+                  Plugins
+                </motion.button>
+              </nav>
+
+              <div className="border-t border-gray-100 dark:border-zinc-800 pt-6">
+                <div className="space-y-4 px-4">
+                  <div className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity">
+                    <span className="text-gray-700 dark:text-gray-300 font-medium truncate mr-4">Hugging Face Username Su...</span>
+                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+                  </div>
+                  <div className="flex items-center justify-between cursor-pointer hover:opacity-80 transition-opacity">
+                    <span className="text-gray-700 dark:text-gray-300 font-medium truncate mr-4">Project Dekho</span>
+                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+                  </div>
+                  
+                  {/* Skeleton loaders */}
+                  <div className="w-3/4 h-3 bg-gray-200 dark:bg-zinc-800 rounded-full animate-pulse mt-6" />
+                  <div className="w-2/3 h-3 bg-gray-200 dark:bg-zinc-800 rounded-full animate-pulse" />
+                  <div className="w-4/5 h-3 bg-gray-200 dark:bg-zinc-800 rounded-full animate-pulse" />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-100 dark:border-zinc-800 flex items-center justify-between pb-8 bg-white dark:bg-[#121212]">
+              <motion.button 
+                whileTap={{ scale: 0.95 }}
+                onClick={onClose}
+                className="flex-1 flex items-center justify-center gap-2 bg-blue-500 text-white px-5 py-3.5 rounded-full font-medium hover:bg-blue-600 transition-colors shadow-sm mr-3"
+              >
+                <Edit2 size={18} />
+                New Chat
+              </motion.button>
+              
+              <motion.button 
+                whileTap={{ scale: 0.9 }}
+                onClick={() => {
+                  onClose();
+                  onOpenSettings();
+                }} 
+                className="w-12 h-12 bg-gray-100 dark:bg-zinc-800 rounded-full flex items-center justify-center text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors flex-shrink-0"
+              >
+                <SettingsIcon size={22} />
+              </motion.button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
