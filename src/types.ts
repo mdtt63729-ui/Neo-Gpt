@@ -11,3 +11,21 @@ export interface ApiKeys {
   nvidia: string;
   gemini: string;
 }
+
+export interface ModelConfig {
+  id: string;
+  name: string;
+  providerId: string;
+  input?: 'text' | 'vision';
+  deletable?: boolean;
+}
+
+export interface ProviderConfig {
+  id: string;
+  name: string;
+  baseUrl: string;
+  apiKey: string;
+  enabled: boolean;
+  builtIn: boolean;
+  models: ModelConfig[];
+}

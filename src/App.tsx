@@ -1,33 +1,80 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Menu, Sparkles, RefreshCw, Plus, Mic, AudioLines, Camera, Image as ImageIcon, Paperclip, Puzzle, BrainCircuit, ArrowUp, Copy, ThumbsUp, ThumbsDown, Speaker, Share2, MoreVertical, X, Download, ChevronDown, Check, Eye, EyeOff, Square } from 'lucide-react';
 import { cn } from './lib/utils';
-import { callApi } from './api';
-import { Message, ApiKeys } from './types';
+import { callApi, testProviderConnection } from './api';
+import { Message, ApiKeys, ProviderConfig } from './types';
 import { motion, AnimatePresence } from 'motion/react';
+import { App as CapacitorApp } from '@capacitor/app';
 import { Sidebar } from './components/Sidebar';
 import { Settings } from './components/Settings';
 import { VoiceModal } from './components/VoiceModal';
 import { DictationModal } from './components/DictationModal';
 
-const MODELS = [
-  { id: 'venus-3.1', name: 'Venus 3.1', provider: 'default' },
-  // OpenRouter
-  { id: 'openrouter/deepseek/deepseek-chat', name: 'DeepSeek V4 Flash', provider: 'openrouter' },
-  { id: 'openrouter/qwen/qwen-2.5-72b-instruct', name: 'Qwen 3.8 Flash', provider: 'openrouter' },
-  { id: 'openrouter/minimax/minimax-01', name: 'MiniMax M3', provider: 'openrouter' },
-  { id: 'openrouter/nvidia/nemotron-4-340b-instruct', name: 'Nemotron 3 Super 120B A12B', provider: 'openrouter' },
-  { id: 'openrouter/zhipuai/glm-4-plus', name: 'GLM-5.3 Flash', provider: 'openrouter' },
-  // Nvidia
-  { id: 'nvidia/nemotron-4-340b-instruct', name: 'Nemotron 3 Super 120B A12B', provider: 'nvidia' },
-  { id: 'nvidia/deepseek-ai/deepseek-coder-33b-instruct', name: 'DeepSeek V4 Pro', provider: 'nvidia' },
-  { id: 'nvidia/minimax-01', name: 'MiniMax M3', provider: 'nvidia' },
-  { id: 'nvidia/nemotron-mini-4b-instruct', name: 'Nemotron 3.5 Lightning 30B A3B', provider: 'nvidia' },
-  { id: 'nvidia/google/gemma-7b-it', name: 'Gemma 4 31B IT', provider: 'nvidia' },
-  // Gemini
-  { id: 'gemini/gemini-1.5-pro-latest', name: 'Gemini 3.8 Flash', provider: 'gemini' },
-  { id: 'gemini/gemini-1.5-flash-latest', name: 'Gemini 3.7 Flash', provider: 'gemini' },
-  { id: 'gemini/gemini-1.5-flash-8b-latest', name: 'Gemini 3.7 Flash Lite', provider: 'gemini' },
-  { id: 'gemini/gemini-1.0-pro-latest', name: 'Gemini 3.6 Flash', provider: 'gemini' },
+const SYSTEM_MODELS = [
+  { id: 'venus-3.1', name: 'Venus 3.1', provider: 'system', providerId: 'system', input: 'text' as const },
+];
+
+const REMOVED_MODEL_IDS = new Set([
+  'openrouter/deepseek/deepseek-chat',
+  'openrouter/minimax/minimax-01',
+  'openrouter/nvidia/nemotron-4-340b-instruct',
+  'openrouter/zhipuai/glm-4-plus',
+  'nvidia/nemotron-4-340b-instruct',
+  'nvidia/deepseek-ai/deepseek-coder-33b-instruct',
+  'nvidia/minimax-01',
+  'nvidia/nemotron-mini-4b-instruct',
+  'nvidia/google/gemma-7b-it',
+  'gemini/gemini-1.0-pro',
+  'gemini/gemini-1.5-pro-latest',
+  'gemini/gemini-1.5-flash-latest',
+  'gemini/gemini-1.5-flash-8b-latest',
+  'gemini/gemini-2.5-pro',
+  'gemini/gemini-2.5-flash',
+  'gemini/gemini-2.5-flash-lite',
+]);
+
+const DEFAULT_PROVIDERS = [
+  {
+    id: 'gemini', name: 'Gemini', baseUrl: '', apiKey: '', enabled: true, builtIn: true,
+    models: [
+      { id: 'gemini/gemini-3.8-flash', name: 'Gemini 3.8 Flash', providerId: 'gemini', input: 'vision' as const, deletable: true },
+      { id: 'gemini/gemini-3.7-flash', name: 'Gemini 3.7 Flash', providerId: 'gemini', input: 'vision' as const, deletable: true },
+      { id: 'gemini/gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite', providerId: 'gemini', input: 'vision' as const, deletable: true },
+      { id: 'gemini/gemini-3.6-flash', name: 'Gemini 3.6 Flash', providerId: 'gemini', input: 'vision' as const, deletable: true },
+    ],
+  },
+  {
+    id: 'openRouter', name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', apiKey: '', enabled: true, builtIn: true,
+    models: [
+      { id: 'openrouter/qwen/qwen-2.5-72b-instruct', name: 'Qwen 3.8 Flash', providerId: 'openRouter', input: 'text' as const, deletable: true },
+      { id: 'openrouter/openrouter/free', name: 'Venus 3.1 pro', providerId: 'openRouter', input: 'vision' as const, deletable: true },
+      { id: 'openrouter/poolside/laguna-s-2.1:free', name: 'Laguna S 2.1 (free)', providerId: 'openRouter', input: 'text' as const, deletable: true },
+      { id: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', name: 'Nemotron 3 Super (free)', providerId: 'openRouter', input: 'text' as const, deletable: true },
+      { id: 'openrouter/thinkingmachines/inkling:free', name: 'Inkling (free)', providerId: 'openRouter', input: 'vision' as const, deletable: true },
+      { id: 'openrouter/inclusionai/ling-3.0-flash-vl:free', name: 'Ling 3.0 Flash VL (free)', providerId: 'openRouter', input: 'vision' as const, deletable: true },
+    ],
+  },
+  {
+    id: 'nvidia', name: 'NVIDIA', baseUrl: 'https://integrate.api.nvidia.com/v1', apiKey: '', enabled: true, builtIn: true,
+    models: [
+      { id: 'nvidia/deepseek-ai/deepseek-v4-flash-0731', name: 'DeepSeek V4 Flash 0731', providerId: 'nvidia', input: 'text' as const, deletable: true },
+      { id: 'nvidia/google/gemma-4-31b-it', name: 'Gemma 4 31B IT', providerId: 'nvidia', input: 'vision' as const, deletable: true },
+      { id: 'nvidia/meta/llama-3.2-11b-vision-instruct', name: 'Llama 3.2 11B Vision Instruct', providerId: 'nvidia', input: 'vision' as const, deletable: true },
+      { id: 'nvidia/nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 3.5 Lightning 30B A3B', providerId: 'nvidia', input: 'text' as const, deletable: true },
+      { id: 'nvidia/mistralai/mistral-nemotron', name: 'Mistral-Nemotron', providerId: 'nvidia', input: 'text' as const, deletable: true },
+    ],
+  },
+  {
+    id: 'groq', name: 'Groq', baseUrl: 'https://api.groq.com/openai/v1', apiKey: '', enabled: true, builtIn: true,
+    models: [
+      { id: 'groq/llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile', providerId: 'groq', input: 'text' as const, deletable: true },
+      { id: 'groq/llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', providerId: 'groq', input: 'text' as const, deletable: true },
+      { id: 'groq/deepseek-r1-distill-llama-70b', name: 'DeepSeek R1 Distill Llama 70B', providerId: 'groq', input: 'text' as const, deletable: true },
+      { id: 'groq/mixtral-8x7b-32768', name: 'Mixtral 8x7B Instruct', providerId: 'groq', input: 'text' as const, deletable: true },
+      { id: 'groq/gemma-2-9b-it', name: 'Gemma 2 9B IT', providerId: 'groq', input: 'text' as const, deletable: true },
+      { id: 'groq/whisper-large-v3', name: 'Whisper Large v3', providerId: 'groq', input: 'text' as const, deletable: true },
+    ],
+  },
 ];
 
 export default function App() {
@@ -43,10 +90,16 @@ export default function App() {
   const [isModelSelectOpen, setIsModelSelectOpen] = useState(false);
   const [isIncognito, setIsIncognito] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [chatHistory, setChatHistory] = useState<{ id: string; title: string; messages: Message[] }[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const lastBackPressRef = useRef(0);
+  const historyHydratedRef = useRef(false);
+  const [settingsHydrated, setSettingsHydrated] = useState(false);
   
   const [theme, setTheme] = useState<'light'|'dark'>('light');
   const [fontFamily, setFontFamily] = useState<'inter' | 'josefin'>('inter');
   const [apiKeys, setApiKeys] = useState<ApiKeys>({ openRouter: '', nvidia: '', gemini: '' });
+  const [providers, setProviders] = useState<ProviderConfig[]>(DEFAULT_PROVIDERS);
   const [selectedModel, setSelectedModel] = useState('venus-3.1');
   
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
@@ -60,17 +113,93 @@ export default function App() {
   useEffect(() => {
     const saved = localStorage.getItem('neo-gpt-settings');
     if (saved) {
-      const parsed = JSON.parse(saved);
+      try {
+        const parsed = JSON.parse(saved);
       if (parsed.theme) setTheme(parsed.theme);
       if (parsed.fontFamily) setFontFamily(parsed.fontFamily);
       if (parsed.apiKeys) setApiKeys(parsed.apiKeys);
+      if (parsed.providers && Array.isArray(parsed.providers)) {
+        const merged = DEFAULT_PROVIDERS.map(defaultProvider => {
+          const savedProvider = parsed.providers.find((p: ProviderConfig) => p.id === defaultProvider.id);
+          if (!savedProvider) return defaultProvider;
+          const savedModels = Array.isArray(savedProvider.models) ? savedProvider.models : [];
+          const mergedModels = [...defaultProvider.models, ...savedModels.filter((savedModel: any) =>
+            !defaultProvider.models.some(defaultModel => defaultModel.id === String(savedModel.id)) &&
+            !REMOVED_MODEL_IDS.has(String(savedModel.id))
+          )];
+          return { ...defaultProvider, ...savedProvider, models: mergedModels };
+        });
+        const custom = parsed.providers.filter((p: ProviderConfig) => !DEFAULT_PROVIDERS.some(d => d.id === p.id));
+        setProviders([...merged, ...custom.map((p: ProviderConfig) => ({ ...p, models: (Array.isArray(p.models) ? p.models : []).filter(m => !REMOVED_MODEL_IDS.has(m.id)) }))]);
+        const loadedProviders = [...merged, ...custom];
+        setApiKeys(prev => ({ ...prev, openRouter: loadedProviders.find(p => p.id === 'openRouter')?.apiKey || prev.openRouter, nvidia: loadedProviders.find(p => p.id === 'nvidia')?.apiKey || prev.nvidia, gemini: loadedProviders.find(p => p.id === 'gemini')?.apiKey || prev.gemini }));
+      } else if (parsed.apiKeys) {
+        setProviders(prev => prev.map(p => ({ ...p, apiKey: parsed.apiKeys[p.id] || p.apiKey })));
+      }
       if (parsed.selectedModel) setSelectedModel(parsed.selectedModel);
+      } catch (error) {
+        console.warn('Ignoring invalid Neo Gpt settings:', error);
+      }
+    }
+    setSettingsHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    localStorage.setItem('neo-gpt-settings', JSON.stringify({ theme, fontFamily, apiKeys, providers, selectedModel }));
+  }, [theme, fontFamily, apiKeys, providers, selectedModel, settingsHydrated]);
+
+  useEffect(() => {
+    try {
+      const savedHistory = localStorage.getItem('neo-gpt-chat-history');
+      if (savedHistory) {
+        const parsed = JSON.parse(savedHistory);
+        if (Array.isArray(parsed)) {
+          setChatHistory(parsed.map((item: any) => ({
+            id: String(item.id),
+            title: String(item.title || 'New chat'),
+            messages: Array.isArray(item.messages) ? item.messages : [],
+          })));
+        }
+      }
+    } catch {
+      setChatHistory([]);
+    } finally {
+      historyHydratedRef.current = true;
     }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('neo-gpt-settings', JSON.stringify({ theme, fontFamily, apiKeys, selectedModel }));
-  }, [theme, fontFamily, apiKeys, selectedModel]);
+    if (!historyHydratedRef.current) return;
+    localStorage.setItem('neo-gpt-chat-history', JSON.stringify(chatHistory.slice(0, 30)));
+  }, [chatHistory]);
+
+  useEffect(() => {
+    if (!activeChatId || messages.length === 0) return;
+    setChatHistory(prev => prev.map(chat => chat.id === activeChatId ? { ...chat, messages } : chat));
+  }, [messages, activeChatId]);
+
+  useEffect(() => {
+    let removeListener: (() => void) | undefined;
+    CapacitorApp.addListener('backButton', () => {
+      if (isSidebarOpen) { setIsSidebarOpen(false); return; }
+      if (isSettingsOpen) { setIsSettingsOpen(false); return; }
+      if (isAttachmentOpen) { setIsAttachmentOpen(false); return; }
+      if (isModelSelectOpen) { setIsModelSelectOpen(false); return; }
+      if (isVoiceOpen) { setIsVoiceOpen(false); return; }
+      if (isDictationOpen) { setIsDictationOpen(false); return; }
+      if (expandedImage) { setExpandedImage(null); return; }
+
+      const now = Date.now();
+      if (now - lastBackPressRef.current < 2200) {
+        CapacitorApp.exitApp();
+      } else {
+        lastBackPressRef.current = now;
+        showToast('Press back again to exit Neo Gpt');
+      }
+    }).then(handle => { removeListener = () => handle.remove(); });
+    return () => removeListener?.();
+  }, [isSidebarOpen, isSettingsOpen, isAttachmentOpen, isModelSelectOpen, isVoiceOpen, isDictationOpen, expandedImage]);
 
   const scrollToBottom = () => {
     if (chatContainerRef.current) {
@@ -90,16 +219,40 @@ export default function App() {
     setTimeout(() => setToastMsg(null), 2500);
   };
 
+  useEffect(() => {
+    const handleExternalToast = (event: Event) => {
+      const message = (event as CustomEvent<string>).detail;
+      if (message) showToast(message);
+    };
+    window.addEventListener('neo-gpt-toast', handleExternalToast);
+    return () => window.removeEventListener('neo-gpt-toast', handleExternalToast);
+  }, []);
+
   const handleActionClick = (action: string, text?: string) => {
     if (action === 'copy' && text) {
-      navigator.clipboard.writeText(text);
-      showToast('Copied to clipboard');
+      navigator.clipboard?.writeText(text).then(() => showToast('Copied to clipboard')).catch(() => showToast('Could not copy text'));
     } else if (action === 'thumbsUp') {
       showToast('Thanks for the feedback!');
     } else if (action === 'thumbsDown') {
       showToast('Feedback submitted');
+    } else if (action === 'speaker' && text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+        showToast('Reading response aloud');
+      } else {
+        showToast('Voice playback is not supported here');
+      }
+    } else if (action === 'share' && text) {
+      if (navigator.share) {
+        navigator.share({ title: 'Neo Gpt response', text }).catch(() => {});
+      } else {
+        navigator.clipboard?.writeText(text).then(() => showToast('Response copied for sharing')).catch(() => showToast('Sharing is not supported here'));
+      }
+    } else if (action === 'more') {
+      showToast('More actions coming soon');
     } else {
-      showToast('Coming soon');
+      showToast('Action selected');
     }
   };
 
@@ -117,14 +270,19 @@ export default function App() {
       text: userText,
     };
 
+    const isStartingNewChat = messages.length === 0;
     setMessages(prev => [...prev, newMessage]);
+    if (isStartingNewChat) {
+      setActiveChatId(newMessage.id);
+      setChatHistory(prev => [{ id: newMessage.id, title: userText.slice(0, 42) || 'New chat', messages: [newMessage] }, ...prev].slice(0, 30));
+    }
     setIsLoading(true);
 
     const isImageCommand = userText.toLowerCase().startsWith('/image');
     
     try {
       const prompt = isImageCommand ? userText.substring(6).trim() : userText;
-      const response = await callApi(prompt, isImageCommand, selectedModel, apiKeys);
+      const response = await callApi(prompt, isImageCommand, selectedModel, apiKeys, providers.map(p => ({ id: p.id, name: p.name, baseUrl: p.baseUrl, apiKey: p.apiKey, enabled: p.enabled })));
       
       if (response.status === 'success') {
         if (isImageCommand) {
@@ -136,7 +294,7 @@ export default function App() {
         } else {
           if (response.text?.trim().toLowerCase().startsWith('/image')) {
             const imgDesc = response.text.substring(response.text.toLowerCase().indexOf('/image') + 6).trim();
-            const imgResponse = await callApi(imgDesc, true, selectedModel, apiKeys);
+            const imgResponse = await callApi(imgDesc, true, selectedModel, apiKeys, providers.map(p => ({ id: p.id, name: p.name, baseUrl: p.baseUrl, apiKey: p.apiKey, enabled: p.enabled })));
             
             if (imgResponse.status === 'success') {
                setMessages(prev => [...prev, {
@@ -174,7 +332,9 @@ export default function App() {
       }]);
     } finally {
       setIsLoading(false);
-      setTimeout(() => inputRef.current?.focus(), 10);
+      // Do not refocus the textarea here. On Android this reopens the soft keyboard
+      // after every response, even when the user did not ask for it.
+      inputRef.current?.blur();
     }
   };
 
@@ -201,14 +361,39 @@ export default function App() {
     fileInputRef.current?.click();
   };
 
-  const availableModels = MODELS.filter(m => 
-    m.provider === 'default' ||
-    (m.provider === 'openrouter' && apiKeys.openRouter) ||
-    (m.provider === 'nvidia' && apiKeys.nvidia) ||
-    (m.provider === 'gemini' && apiKeys.gemini)
-  );
+  const availableModels = [
+    ...SYSTEM_MODELS,
+    ...providers.filter(p => p.enabled).flatMap(p => p.models),
+  ].filter((model, index, all) => all.findIndex(m => m.id === model.id) === index);
 
-  const currentModelName = MODELS.find(m => m.id === selectedModel)?.name || 'Venus 3.1';
+  const currentModelName = availableModels.find(m => m.id === selectedModel)?.name || 'Venus 3.1';
+
+  const selectModel = (modelId: string) => {
+    if (!availableModels.some(model => model.id === modelId)) return;
+    setSelectedModel(modelId);
+    setIsModelSelectOpen(false);
+  };
+
+  useEffect(() => {
+    if (!availableModels.some(model => model.id === selectedModel)) {
+      setSelectedModel('venus-3.1');
+    }
+  }, [providers, selectedModel]);
+
+  const handleTestProvider = async (provider: ProviderConfig) => {
+    const result = await testProviderConnection(provider.id, provider.apiKey, provider.baseUrl);
+    if (result.ok) showToast(result.message);
+    else showToast(result.message);
+    return result;
+  };
+
+  if (!settingsHydrated || !historyHydratedRef.current) {
+    return (
+      <div className="neo-boot-screen" aria-label="Loading Neo Gpt">
+        <div className="neo-boot-mark">N</div>
+      </div>
+    );
+  }
 
   return (
     <div className={theme}>
@@ -219,10 +404,11 @@ export default function App() {
         "max-w-[480px] mx-auto border-x border-gray-100 dark:border-zinc-800"
       )}>
         {/* Top Bar */}
-        <header className="flex items-center justify-between px-4 py-3 z-10 dark:bg-[#121212]">
+        <header className="neo-topbar flex items-center justify-between px-4 pb-3 z-10 dark:bg-[#121212]">
           <div className="flex items-center gap-3">
             <motion.button 
-              whileTap={{ scale: 0.9 }}
+              type="button"
+              whileTap={{ scale: 0.94 }}
               onClick={() => setIsSidebarOpen(true)}
               className="p-3 bg-gray-50 dark:bg-zinc-800 rounded-full hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors"
             >
@@ -232,7 +418,7 @@ export default function App() {
             {/* Model Selector Capsule */}
             <div className="relative">
               <motion.button 
-                whileTap={{ scale: 0.95 }}
+                whileTap={{ scale: 0.94 }}
                 onClick={() => setIsModelSelectOpen(!isModelSelectOpen)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 rounded-full hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors"
               >
@@ -261,14 +447,13 @@ export default function App() {
                           whileTap={{ scale: 0.98 }}
                           key={model.id}
                           onClick={() => {
-                            setSelectedModel(model.id);
-                            setIsModelSelectOpen(false);
+                            selectModel(model.id);
                           }}
                           className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-zinc-800 text-left"
                         >
                           <div>
                             <div className="text-gray-900 dark:text-gray-100 font-medium text-sm">{model.name}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400 capitalize">{model.provider}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 capitalize">{model.providerId === 'system' ? 'Neo Gpt' : (providers.find(p => p.id === model.providerId)?.name || model.providerId)}</div>
                           </div>
                           {selectedModel === model.id && <Check size={16} className="text-blue-500" />}
                         </motion.button>
@@ -298,7 +483,7 @@ export default function App() {
         </header>
 
         {/* Main Chat Area */}
-        <main ref={chatContainerRef} className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-24 pt-4 dark:bg-[#121212]">
+        <main ref={chatContainerRef} className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-28 pt-2 dark:bg-[#121212] neo-content-fade">
           {messages.length === 0 && !isLoading && (
             <div className="h-full flex flex-col items-center justify-center text-center px-4">
               <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200 tracking-tight">How can I help you today?</h1>
@@ -341,8 +526,8 @@ export default function App() {
                         <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('copy', msg.text)} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><Copy size={16} /></motion.button>
                         <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('thumbsUp')} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><ThumbsUp size={16} /></motion.button>
                         <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('thumbsDown')} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><ThumbsDown size={16} /></motion.button>
-                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('speaker')} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><Speaker size={16} /></motion.button>
-                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('share')} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><Share2 size={16} /></motion.button>
+                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('speaker', msg.text)} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><Speaker size={16} /></motion.button>
+                        <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('share', msg.text)} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><Share2 size={16} /></motion.button>
                         <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleActionClick('more')} className="p-2 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"><MoreVertical size={16} /></motion.button>
                       </div>
                     </div>
@@ -352,15 +537,26 @@ export default function App() {
             </AnimatePresence>
             
             {isLoading && (
-              <motion.div 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }}
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
                 className="flex justify-start w-full"
+                aria-live="polite"
+                aria-label="Thinking"
               >
-                <div className="bg-gray-50 dark:bg-zinc-800/50 px-4 py-4 rounded-[24px] rounded-tl-[8px] flex items-center gap-2 shadow-sm">
-                  <motion.div animate={{ scale: [1, 1.3, 1], opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.4 }} className="w-2.5 h-2.5 bg-blue-500 rounded-full" />
-                  <motion.div animate={{ scale: [1, 1.3, 1], opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.4, delay: 0.2 }} className="w-2.5 h-2.5 bg-blue-500 rounded-full" />
-                  <motion.div animate={{ scale: [1, 1.3, 1], opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.4, delay: 0.4 }} className="w-2.5 h-2.5 bg-blue-500 rounded-full" />
+                <div className="neo-thinking-card">
+                  <motion.span
+                    className="neo-thinking-orb"
+                    animate={{ scale: [1, 1.18, 1], opacity: [0.55, 1, 0.55] }}
+                    transition={{ repeat: Infinity, duration: 1.7, ease: 'easeInOut' }}
+                  />
+                  <span className="neo-thinking-label">Thinking</span>
+                  <span className="neo-thinking-dots" aria-hidden="true">
+                    <motion.i animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 1.25, delay: 0 }} />
+                    <motion.i animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 1.25, delay: 0.18 }} />
+                    <motion.i animate={{ opacity: [0.2, 1, 0.2] }} transition={{ repeat: Infinity, duration: 1.25, delay: 0.36 }} />
+                  </span>
                 </div>
               </motion.div>
             )}
@@ -369,7 +565,7 @@ export default function App() {
         </main>
 
         {/* Bottom Input Area */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white to-transparent dark:from-[#121212] dark:via-[#121212] pt-6 pb-4 px-4 z-20">
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-[#121212] dark:via-[#121212]/95 pt-6 px-4 z-20 neo-bottom-shell">
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -458,7 +654,7 @@ export default function App() {
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   type="button"
-                  onClick={() => setIsLoading(false)}
+                  onClick={() => { setIsLoading(false); showToast('Stopped'); }}
                   className="w-10 h-10 bg-gray-900 dark:bg-white rounded-full flex items-center justify-center text-white dark:text-gray-900 shadow-sm transition-colors ml-1"
                 >
                   <Square size={16} fill="currentColor" strokeWidth={0} />
@@ -506,6 +702,16 @@ export default function App() {
           isOpen={isSidebarOpen} 
           onClose={() => setIsSidebarOpen(false)} 
           onOpenSettings={() => setIsSettingsOpen(true)}
+          chatHistory={chatHistory}
+          onSelectChat={(id) => {
+            const chat = chatHistory.find(item => item.id === id);
+            if (!chat) return;
+            setActiveChatId(chat.id);
+            setMessages(chat.messages);
+            setInput('');
+            setIsSidebarOpen(false);
+          }}
+          onNewChat={() => { setMessages([]); setActiveChatId(null); setInput(''); setIsSidebarOpen(false); setIsAttachmentOpen(false); setIsModelSelectOpen(false); showToast('New chat started'); }}
         />
         
         <Settings 
@@ -519,7 +725,10 @@ export default function App() {
           setApiKeys={setApiKeys}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
-          models={availableModels}
+          providers={providers}
+          setProviders={setProviders}
+          onTestProvider={handleTestProvider}
+          onSelectProviderModel={(modelId) => setSelectedModel(modelId)}
         />
         
         <VoiceModal 
