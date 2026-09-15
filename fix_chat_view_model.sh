@@ -1,0 +1,3 @@
+#!/bin/bash
+sed -i 's/messageDao.insert(Message(text = "Error getting response.", isUser = false, userId = userId))/messageDao.insert(Message(text = "Error: API monthly limit reached or invalid response. Please configure your own API keys in Settings.", isUser = false, userId = userId))/g' app/src/main/java/com/example/ui/chat/ChatViewModel.kt
+sed -i 's/messageDao.insert(Message(text = "Error generating image.", isUser = false, userId = userId))/messageDao.insert(Message(text = "Error: API monthly limit reached or unable to generate image.", isUser = false, userId = userId))/g' app/src/main/java/com/example/ui/chat/ChatViewModel.kt

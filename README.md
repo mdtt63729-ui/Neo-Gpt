@@ -1,63 +1,22 @@
-# ALTREX CODE - Android App
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+</div>
 
-Native Android app built with Kotlin + Jetpack Compose, matching the ALTREX CODE desktop application.
+# Run and deploy your AI Studio app
 
-## Building
+This contains everything you need to run your app locally.
 
-1. Open this project in Android Studio (Hedgehog 2023.1.1 or later)
-2. Let Gradle sync complete
-3. Click Run or use `./gradlew assembleDebug` to build an APK
+View your app in AI Studio: https://ai.studio/apps/9c50cc89-4561-4699-9be7-862aa4c47df6
 
-## Requirements
+## Run Locally
 
-- Android Studio Hedgehog or later
-- JDK 17+
-- Android SDK 34
-- Kotlin 1.9.20+
+**Prerequisites:**  [Android Studio](https://developer.android.com/studio)
 
-## Architecture
 
-- **UI**: Jetpack Compose + Material3 (warm neutral charcoal dark theme)
-- **State**: MVVM with StateFlow
-- **Network**: OkHttp with SSE streaming
-- **Persistence**: Room database + EncryptedSharedPreferences
-- **DI**: Manual dependency injection via Application class
-
-## Features
-
-- 9 cloud AI providers (Google Gemini, Cerebras, Cloudflare, SambaNova, Groq, OpenRouter, NVIDIA NIM, OpenAI, Custom)
-- Ask mode (read-only Q&A with streaming)
-- Agent mode (tool-calling AI with edit_file, write_file, read_file, list_files)
-- Multi-AI mode (Director-orchestrated multi-model task execution)
-- AUTO model selection with keyword-based scoring
-- Automatic model fallback on failure
-- Conversation history with persistence
-- Provider management with connection testing
-- Settings with diagnostics
-- Command palette
-- Markdown rendering with code blocks
-- Encrypted credential storage
-- Error classification (14 categories)
-- Request policies per provider
-- Loop detection in agent mode
-- Context budget management
-
-## Package Structure
-
-```
-com.altrex.mobile/
-├── AltrexApplication.kt       # App initialization, DI
-├── MainActivity.kt             # Single activity, Compose entry point
-├── data/
-│   ├── model/                  # Data models (all types)
-│   ├── provider/               # Provider system (API client, registry, errors, router)
-│   ├── agent/                  # Agent system (runner, tool broker, budget, context)
-│   ├── multiai/                # Multi-AI system (director, contracts, state store)
-│   ├── repository/             # Repositories (provider, conversation, settings)
-│   └── local/                  # Room database, type converters
-├── ui/
-│   ├── theme/                  # Colors, typography, theme
-│   ├── components/             # Reusable composables (primitives, markdown, code blocks)
-│   └── screens/                # All screens (chat, home, sidebar, dialogs, etc.)
-└── viewmodel/                  # AltrexViewModel with StateFlow
-```
+1. Open Android Studio
+2. Select **Open** and choose the directory containing this project
+3. Allow Android Studio to fix any incompatibilities as it imports the project.
+4. Create a file named `.env` in the project directory and set `GEMINI_API_KEY` in that file to your Gemini API key (see `.env.example` for an example)
+5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
+6. Run the app on an emulator or physical device
+7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
