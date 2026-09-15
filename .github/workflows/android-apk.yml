@@ -39,6 +39,46 @@ jobs:
       - name: Sync Capacitor
         run: bunx cap sync android
 
+      - name: Configure optional native Firebase Android credentials
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          # Native Google account selection requires the Android Firebase app
+          # configuration plus the app's SHA-1 fingerprints. The web Firebase
+          # config is still used for the web/PWA fallback. If the secret is not
+          # configured yet, the app keeps the web Google flow instead of failing
+          # the APK build.
+          if [ -n "${GOOGLE_SERVICES_JSON:-}" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            python3 - <<'PY2'
+from pathlib import Path
+import json
+p = Path('android/app/google-services.json')
+json.loads(p.read_text(encoding='utf-8'))
+print('google-services.json: valid JSON')
+PY2
+
+            python3 - <<'PY2'
+from pathlib import Path
+import re
+
+root = Path('android/build.gradle')
+text = root.read_text(encoding='utf-8') if root.exists() else ''
+if 'com.google.gms:google-services' not in text:
+    text = text.replace('dependencies {', "dependencies {\n        classpath 'com.google.gms:google-services:4.4.2'", 1)
+    root.write_text(text, encoding='utf-8')
+
+app = Path('android/app/build.gradle')
+text = app.read_text(encoding='utf-8')
+if "com.google.gms.google-services" not in text:
+    text = "apply plugin: 'com.google.gms.google-services'\n" + text
+    app.write_text(text, encoding='utf-8')
+print('Google Services Gradle plugin configured')
+PY2
+          else
+            echo 'GOOGLE_SERVICES_JSON secret not configured; native Google auth will use the safe web fallback.'
+          fi
+
       - name: Apply immersive fullscreen Android chrome
         run: |
           python3 - <<'PY2'

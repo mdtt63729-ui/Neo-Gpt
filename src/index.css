@@ -992,3 +992,109 @@ button, textarea, input {
 }
 .dark .neo-message-longpress-menu button { color: rgb(244 244 245); }
 .dark .neo-message-longpress-menu button:active { background: rgba(59,130,246,.18); }
+
+/* Mobile viewport hardening: keep the app at 1:1 scale and prevent the
+   browser/WebView from progressively zooming during taps, focus, or gestures. */
+html, body, #root {
+  max-width: 100%;
+  min-width: 0;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+body {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
+}
+input, textarea, select {
+  font-size: 16px !important;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  max-width: 100%;
+}
+button, a, [role="button"] {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.neo-launch-shell {
+  width: 100%;
+  max-width: 480px;
+  min-width: 0;
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  contain: layout size paint;
+}
+.neo-chat-scroll {
+  min-width: 0;
+  width: 100%;
+  overflow-x: hidden !important;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.neo-message-longpress-menu {
+  touch-action: manipulation;
+}
+@media (max-width: 480px) {
+  .neo-launch-shell { border-left: 0 !important; border-right: 0 !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+}
+
+/* v23: first-launch auth uses the same premium Neo Gpt visual language. */
+.neo-auth-screen {
+  position: relative;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(99,102,241,.10), transparent 34%),
+    linear-gradient(180deg, #fafafa 0%, #f4f4f5 100%);
+}
+.neo-auth-premium-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #121212;
+  color: #fff;
+}
+.neo-auth-premium-logo {
+  width: 68px;
+  height: 68px;
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: linear-gradient(145deg, #27272a, #09090b);
+  border: 1px solid rgba(255,255,255,.12);
+  box-shadow: 0 18px 60px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.08);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -.04em;
+}
+.neo-auth-premium-name {
+  margin-top: 16px;
+  font-size: 21px;
+  font-weight: 750;
+  letter-spacing: -.035em;
+}
+.dark .neo-auth-screen {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(99,102,241,.13), transparent 36%),
+    linear-gradient(180deg, #121212 0%, #0b0b0c 100%);
+}
+.dark .neo-auth-card {
+  box-shadow: 0 24px 70px rgba(0,0,0,.34), 0 0 0 1px rgba(255,255,255,.03);
+}
+@media (max-width: 480px) {
+  .neo-auth-screen { align-items: flex-start; padding-top: calc(env(safe-area-inset-top, 0px) + 22px); }
+  .neo-auth-card { width: 100%; max-width: 430px; margin-top: auto; margin-bottom: auto; }
+}

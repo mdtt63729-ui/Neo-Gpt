@@ -11,6 +11,8 @@ import { Settings } from './components/Settings';
 import { VoiceModal } from './components/VoiceModal';
 import { DictationModal } from './components/DictationModal';
 import { AuthScreen, AuthSession, AuthUser } from './components/AuthScreen';
+import { firebaseAuth, firebaseReady } from './lib/firebase';
+import { getNativeCurrentUser, nativeSignOut } from './lib/nativeGoogleAuth';
 
 const SYSTEM_MODELS = [
   { id: 'venus-3.1', name: 'Venus 3.1', provider: 'system', providerId: 'system', input: 'text' as const },
@@ -277,7 +279,7 @@ export default function App() {
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [isHeaderMoreOpen, setIsHeaderMoreOpen] = useState(false);
   const [textareaHeight, setTextareaHeight] = useState(52);
-  const [authState, setAuthState] = useState<'loading' | 'authenticated' | 'guest' | 'unauthenticated'>('loading');
+  const [authState, setAuthState] = useState<'loading' | 'authenticated' | 'guest' | 'unauthenticated'>(() => localStorage.getItem('neo-gpt-guest-mode') === '1' ? 'guest' : 'loading');
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [authPromptFromGuest, setAuthPromptFromGuest] = useState(false);
   const [isNearChatBottom, setIsNearChatBottom] = useState(true);
@@ -309,39 +311,62 @@ export default function App() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
     let cancelled = false;
-    const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
-    const anonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '');
     const restore = async () => {
-      if (!supabaseUrl || !anonKey) { if (!cancelled) setAuthState('unauthenticated'); return; }
-      const raw = localStorage.getItem('neo-gpt-auth-session');
-      if (!raw) {
-        const skipped = localStorage.getItem('neo-gpt-guest-mode') === '1';
-        if (!cancelled) setAuthState(skipped ? 'guest' : 'unauthenticated');
+      const guestMode = localStorage.getItem('neo-gpt-guest-mode') === '1';
+      if (!firebaseReady()) {
+        if (!guestMode && !cancelled) setAuthState('unauthenticated');
+        else if (!cancelled) setAuthState('guest');
         return;
       }
       try {
-        let session = JSON.parse(raw) as AuthSession;
-        if (!session.access_token) throw new Error('missing token');
-        let response = await fetch(`${supabaseUrl}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: `Bearer ${session.access_token}` } });
-        if (!response.ok && session.refresh_token) {
-          const refresh = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, { method: 'POST', headers: { apikey: anonKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: session.refresh_token }) });
-          if (!refresh.ok) throw new Error('session expired');
-          const next = await refresh.json();
-          session = { access_token: next.access_token, refresh_token: next.refresh_token || session.refresh_token, expires_at: Date.now() / 1000 + Number(next.expires_in || 3600) };
-          localStorage.setItem('neo-gpt-auth-session', JSON.stringify(session));
-          response = await fetch(`${supabaseUrl}/auth/v1/user`, { headers: { apikey: anonKey, Authorization: `Bearer ${session.access_token}` } });
+        // Native Google authentication is restored first on Android/iOS.
+        const nativeUser = await getNativeCurrentUser();
+        if (nativeUser) {
+          if (cancelled) return;
+          try {
+            const plugin = await import('@capacitor-firebase/authentication');
+            const tokenResult = await plugin.FirebaseAuthentication.getIdToken({ forceRefresh: false });
+            const token = tokenResult?.token || '';
+            const session: AuthSession = { access_token: token, refresh_token: '', expires_at: Date.now() / 1000 + 3600 };
+            localStorage.setItem('neo-gpt-auth-session', JSON.stringify(session));
+            authSessionRef.current = session;
+            setAuthUser({ id: String(nativeUser.uid || ''), email: String(nativeUser.email || ''), name: nativeUser.displayName || nativeUser.email?.split('@')[0], avatarUrl: nativeUser.photoUrl || nativeUser.photoURL || undefined });
+            localStorage.removeItem('neo-gpt-guest-mode');
+            setAuthState('authenticated');
+            return;
+          } catch {
+            // Fall through to the web Firebase session if native token retrieval fails.
+          }
         }
-        if (!response.ok) throw new Error('invalid session');
-        const user = await response.json();
-        if (!cancelled) { authSessionRef.current = session; setAuthUser({ id: String(user.id), email: String(user.email || ''), name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0], avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture }); setAuthState('authenticated'); }
+
+        const auth = firebaseAuth();
+        unsubscribe = auth.onAuthStateChanged(async (user: any) => {
+          if (cancelled) return;
+          if (!user) {
+            const skipped = localStorage.getItem('neo-gpt-guest-mode') === '1';
+            setAuthState(skipped ? 'guest' : 'unauthenticated');
+            return;
+          }
+          try {
+            const token = await user.getIdToken();
+            const session: AuthSession = { access_token: token, refresh_token: '', expires_at: Date.now() / 1000 + 3600 };
+            localStorage.setItem('neo-gpt-auth-session', JSON.stringify(session));
+            authSessionRef.current = session;
+            setAuthUser({ id: String(user.uid), email: String(user.email || ''), name: user.displayName || user.email?.split('@')[0], avatarUrl: user.photoURL || undefined });
+            localStorage.removeItem('neo-gpt-guest-mode');
+            setAuthState('authenticated');
+          } catch {
+            setAuthState('unauthenticated');
+          }
+        });
       } catch {
-        localStorage.removeItem('neo-gpt-auth-session');
-        if (!cancelled) setAuthState('unauthenticated');
+        if (!cancelled) setAuthState(guestMode ? 'guest' : 'unauthenticated');
       }
     };
     restore();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; unsubscribe?.(); };
   }, []);
 
   useEffect(() => {
@@ -845,12 +870,8 @@ export default function App() {
   }
 
   const logout = async () => {
-    const url = String(import.meta.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
-    const key = String(import.meta.env.VITE_SUPABASE_ANON_KEY || '');
-    const session = authSessionRef.current;
-    try {
-      if (url && key && session?.access_token) await fetch(`${url}/auth/v1/logout`, { method: 'POST', headers: { apikey: key, Authorization: `Bearer ${session.access_token}` } });
-    } catch { /* local logout still completes */ }
+    try { if (firebaseReady()) await firebaseAuth().signOut(); } catch { /* local logout still completes */ }
+    await nativeSignOut();
     localStorage.removeItem('neo-gpt-auth-session');
     localStorage.removeItem('neo-gpt-guest-mode');
     authSessionRef.current = null; setAuthUser(null); setAuthPromptFromGuest(false); setIsSettingsOpen(false); setIsSidebarOpen(false); setAuthState('unauthenticated');
